@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+set -euo pipefail
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+FLUTTER_BIN="$ROOT_DIR/.flutter_sdk/flutter/bin/flutter"
+if [ ! -x "$FLUTTER_BIN" ]; then
+  echo "Flutter SDK lokal belum ditemukan di: $FLUTTER_BIN"
+  echo "Jalankan salah satu script setup berikut:"
+  echo "  Linux : ./tool/setup_flutter_sdk_linux.sh"
+  echo "  macOS : ./tool/setup_flutter_sdk_macos.sh"
+  exit 1
+fi
+exec "$FLUTTER_BIN" "$@"
