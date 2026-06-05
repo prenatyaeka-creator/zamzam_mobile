@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "844100582161",
+    "project_id": "zamzam-laundry",
+    "storage_bucket": "zamzam-laundry.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:844100582161:android:39097a49efae46594b2ab0",
+        "android_client_info": {
+          "package_name": "id.zamzamlaundry.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBYQZRBJ6mcJ8Rv9rLFAKA9GJ2enOnYP60"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

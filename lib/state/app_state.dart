@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../core/formatters.dart';
@@ -17,20 +19,21 @@ class AppState extends ChangeNotifier {
   final List<AppUser> _customers = <AppUser>[];
   final List<LaundryService> _services = <LaundryService>[];
   final List<LaundryOrder> _orders = <LaundryOrder>[];
-  final Map<int, List<OrderStatusLog>> _statusLogs = <int, List<OrderStatusLog>>{};
+  final Map<int, List<OrderStatusLog>> _statusLogs =
+      <int, List<OrderStatusLog>>{};
   final List<TransactionEntry> _transactions = <TransactionEntry>[];
   final List<ChatRoom> _chatRooms = <ChatRoom>[];
-  final Map<int, List<ChatMessage>> _messagesByRoom = <int, List<ChatMessage>>{};
+  final Map<int, List<ChatMessage>> _messagesByRoom =
+      <int, List<ChatMessage>>{};
 
-  int _dashboardTotalCustomers = 0;
-  int _dashboardTotalOrders = 0;
   int _dashboardActiveOrders = 0;
-  double _dashboardTodayRevenue = 0;
   double _dashboardMonthlyRevenue = 0;
 
   List<AppUser> get customers => List<AppUser>.unmodifiable(_customers);
-  List<LaundryService> get services => List<LaundryService>.unmodifiable(_services);
-  List<TransactionEntry> get transactions => List<TransactionEntry>.unmodifiable(_transactions);
+  List<LaundryService> get services =>
+      List<LaundryService>.unmodifiable(_services);
+  List<TransactionEntry> get transactions =>
+      List<TransactionEntry>.unmodifiable(_transactions);
   List<ChatRoom> get sortedRooms {
     final items = [..._chatRooms];
     items.sort((a, b) => b.lastMessageAt.compareTo(a.lastMessageAt));
@@ -66,17 +69,24 @@ class AppState extends ChangeNotifier {
   List<LaundryOrder> get currentCustomerOrders {
     final user = currentUser;
     if (user == null) return <LaundryOrder>[];
-    return allOrdersSorted.where((order) => order.customerId == user.id).toList();
+    return allOrdersSorted
+        .where((order) => order.customerId == user.id)
+        .toList();
   }
 
   int get activeOrdersCount {
     if (currentUser?.role == UserRole.admin && _dashboardActiveOrders > 0) {
       return _dashboardActiveOrders;
     }
-    return _orders.where((order) => order.status != OrderStatus.completed && order.status != OrderStatus.cancelled).length;
+    return _orders
+        .where((order) =>
+            order.status != OrderStatus.completed &&
+            order.status != OrderStatus.cancelled)
+        .length;
   }
 
-  int get completedOrdersCount => _orders.where((order) => order.status == OrderStatus.completed).length;
+  int get completedOrdersCount =>
+      _orders.where((order) => order.status == OrderStatus.completed).length;
 
   double get totalRevenue {
     if (_transactions.isEmpty && _dashboardMonthlyRevenue > 0) {
@@ -99,13 +109,27 @@ class AppState extends ChangeNotifier {
     required UserRole role,
   }) async {
     await _guard(() async {
-      final result = await _api.login(email.trim(), password);
+      // Log login attempt for debugging
+      // ignore: avoid_print
+      print('[AppState] Attempting login email=${email.trim()} role=$role');
+      final result = await _api.login(
+        email.trim(),
+        password,
+        expectedRole: role,
+      );
+      // ignore: avoid_print
+      print(
+          '[AppState] Login result user=${result.user.email} role=${result.user.role}');
       if (result.user.role != role) {
         throw ApiException('Role akun tidak sesuai dengan pilihan login.');
       }
       currentUser = result.user;
       _token = result.token;
-      await _loadInitialData();
+      notifyListeners();
+      // ignore: avoid_print
+      print(
+          '[AppState] Login success, navigating to home. Loading data in background.');
+      unawaited(_loadInitialData());
     });
 
     return currentUser != null && currentUser!.role == role;
@@ -120,21 +144,23 @@ class AppState extends ChangeNotifier {
   }) async {
     String? error;
     await _guard(() async {
-      final result = await _api.registerCustomer(
+      await _api.registerCustomer(
         name: name.trim(),
         email: email.trim(),
         phone: phone.trim(),
         address: address.trim(),
         password: password,
       );
-      currentUser = result.user;
-      _token = result.token;
-      await _loadInitialData();
+      await _api.signOut();
+      currentUser = null;
+      _token = null;
+      notifyListeners();
     }, onError: (message) => error = message);
     return error;
   }
 
   Future<void> logout() async {
+    await _api.signOut();
     currentUser = null;
     _token = null;
     lastError = null;
@@ -146,10 +172,7 @@ class AppState extends ChangeNotifier {
     _transactions.clear();
     _chatRooms.clear();
     _messagesByRoom.clear();
-    _dashboardTotalCustomers = 0;
-    _dashboardTotalOrders = 0;
     _dashboardActiveOrders = 0;
-    _dashboardTodayRevenue = 0;
     _dashboardMonthlyRevenue = 0;
     notifyListeners();
   }
@@ -210,10 +233,7 @@ class AppState extends ChangeNotifier {
   Future<void> refreshDashboard() async {
     if (_token == null || currentUser?.role != UserRole.admin) return;
     final data = await _api.getDashboard(_token!);
-    _dashboardTotalCustomers = _asInt(data['total_customers']);
-    _dashboardTotalOrders = _asInt(data['total_orders']);
     _dashboardActiveOrders = _asInt(data['active_orders']);
-    _dashboardTodayRevenue = _asDouble(data['today_revenue']);
     _dashboardMonthlyRevenue = _asDouble(data['monthly_revenue']);
     notifyListeners();
   }
@@ -224,12 +244,13 @@ class AppState extends ChangeNotifier {
     final list = ((data['transactions'] as List?) ?? const [])
         .map((item) => Map<String, dynamic>.from(item as Map))
         .map((json) {
-          final orderId = _asInt(json['order_id']);
-          final matchedOrders = _orders.where((order) => order.id == orderId).toList();
-          final customerId = matchedOrders.isNotEmpty ? matchedOrders.first.customerId : 0;
-          return TransactionEntry.fromJson(json, customerId: customerId);
-        })
-        .toList();
+      final orderId = _asInt(json['order_id']);
+      final matchedOrders =
+          _orders.where((order) => order.id == orderId).toList();
+      final customerId =
+          matchedOrders.isNotEmpty ? matchedOrders.first.customerId : 0;
+      return TransactionEntry.fromJson(json, customerId: customerId);
+    }).toList();
     _transactions
       ..clear()
       ..addAll(list);
@@ -244,7 +265,8 @@ class AppState extends ChangeNotifier {
       ..addAll(rooms);
 
     if (currentUser?.role == UserRole.admin) {
-      _selectedAdminRoomId = rooms.isNotEmpty ? (_selectedAdminRoomId ?? rooms.first.id) : null;
+      _selectedAdminRoomId =
+          rooms.isNotEmpty ? (_selectedAdminRoomId ?? rooms.first.id) : null;
     }
 
     _messagesByRoom.clear();
@@ -359,7 +381,8 @@ class AppState extends ChangeNotifier {
         customerId: customerId,
       );
       final targetRoomId = sent.roomId;
-      final bucket = _messagesByRoom.putIfAbsent(targetRoomId, () => <ChatMessage>[]);
+      final bucket =
+          _messagesByRoom.putIfAbsent(targetRoomId, () => <ChatMessage>[]);
       bucket.add(sent);
       await refreshChatRooms();
       if (currentUser?.role == UserRole.admin) {
@@ -452,7 +475,9 @@ class AppState extends ChangeNotifier {
 
   double spendingByCustomer(int customerId) {
     return _transactions
-        .where((transaction) => transaction.customerId == customerId && transaction.status == PaymentStatus.paid)
+        .where((transaction) =>
+            transaction.customerId == customerId &&
+            transaction.status == PaymentStatus.paid)
         .fold<double>(0, (sum, item) => sum + item.amount);
   }
 
@@ -461,7 +486,8 @@ class AppState extends ChangeNotifier {
   String shortDate(DateTime value) => formatShortDate(value);
   String shortTime(DateTime value) => formatShortTime(value);
 
-  Future<void> _guard(Future<void> Function() action, {void Function(String message)? onError}) async {
+  Future<void> _guard(Future<void> Function() action,
+      {void Function(String message)? onError}) async {
     try {
       isBusy = true;
       lastError = null;
@@ -469,9 +495,15 @@ class AppState extends ChangeNotifier {
       await action();
     } on ApiException catch (e) {
       lastError = e.message;
+      // Log to console for easier runtime debugging
+      // ignore: avoid_print
+      print('[AppState] ApiException: ${e.message}');
       onError?.call(e.message);
-    } catch (_) {
+    } catch (error, stackTrace) {
       lastError = 'Terjadi kesalahan tak terduga.';
+      // Log stack trace for unexpected errors
+      // ignore: avoid_print
+      print('[AppState] Unexpected error: $error\n$stackTrace');
       onError?.call(lastError!);
     } finally {
       isBusy = false;

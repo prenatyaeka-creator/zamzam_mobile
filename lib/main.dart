@@ -1,7 +1,9 @@
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:provider/provider.dart';
 
+import 'config/app_config.dart';
 import 'core/app_theme.dart';
 import 'models/app_models.dart';
 import 'screens/admin/admin_home.dart';
@@ -11,6 +13,7 @@ import 'state/app_state.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(options: AppConfig.firebaseOptions);
   await initializeDateFormatting('id_ID');
   runApp(const ZamzamLaundryApp());
 }

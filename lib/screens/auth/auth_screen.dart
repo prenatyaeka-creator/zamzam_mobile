@@ -15,7 +15,7 @@ class AuthScreen extends StatefulWidget {
 
 class _AuthScreenState extends State<AuthScreen> {
   bool isRegister = false;
-  UserRole selectedRole = UserRole.customer;
+  UserRole? selectedRole;
 
   final nameController = TextEditingController();
   final emailController = TextEditingController();
@@ -52,7 +52,7 @@ class _AuthScreenState extends State<AuthScreen> {
                 trailing: Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.18),
+                    color: Colors.white.withAlpha(46),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: const Icon(
@@ -69,7 +69,8 @@ class _AuthScreenState extends State<AuthScreen> {
                   children: [
                     Text(
                       isRegister ? 'Registrasi Pelanggan' : 'Masuk ke Aplikasi',
-                      style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
+                      style: const TextStyle(
+                          fontSize: 22, fontWeight: FontWeight.w800),
                     ),
                     const SizedBox(height: 6),
                     Text(
@@ -80,7 +81,8 @@ class _AuthScreenState extends State<AuthScreen> {
                     ),
                     const SizedBox(height: 18),
                     if (!isRegister) ...[
-                      const Text('Pilih Role', style: TextStyle(fontWeight: FontWeight.w700)),
+                      const Text('Pilih Role',
+                          style: TextStyle(fontWeight: FontWeight.w700)),
                       const SizedBox(height: 10),
                       Wrap(
                         spacing: 10,
@@ -95,26 +97,39 @@ class _AuthScreenState extends State<AuthScreen> {
                           );
                         }).toList(),
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 10),
+                      if (selectedRole == null)
+                        Text(
+                          'Pilih role terlebih dahulu sebelum login.',
+                          style: TextStyle(
+                              color: Colors.red.shade700, fontSize: 12),
+                        ),
+                      const SizedBox(height: 6),
                     ],
                     if (isRegister) ...[
                       TextField(
                         controller: nameController,
-                        decoration: const InputDecoration(labelText: 'Nama Lengkap'),
+                        decoration:
+                            const InputDecoration(labelText: 'Nama Lengkap'),
                       ),
                       const SizedBox(height: 12),
                     ],
                     TextField(
                       controller: emailController,
                       keyboardType: TextInputType.emailAddress,
-                      decoration: const InputDecoration(labelText: 'Email'),
+                      decoration: InputDecoration(
+                        labelText: 'Email',
+                        hintText:
+                            isRegister ? 'Contoh: pelanggan@contoh.com' : null,
+                      ),
                     ),
                     const SizedBox(height: 12),
                     if (isRegister) ...[
                       TextField(
                         controller: phoneController,
                         keyboardType: TextInputType.phone,
-                        decoration: const InputDecoration(labelText: 'Nomor Telepon'),
+                        decoration:
+                            const InputDecoration(labelText: 'Nomor Telepon'),
                       ),
                       const SizedBox(height: 12),
                       TextField(
@@ -134,7 +149,9 @@ class _AuthScreenState extends State<AuthScreen> {
                       width: double.infinity,
                       child: ElevatedButton(
                         onPressed: app.isBusy ? null : _submit,
-                        child: Text(app.isBusy ? 'Memproses...' : (isRegister ? 'Daftar Sekarang' : 'Login')), 
+                        child: Text(app.isBusy
+                            ? 'Memproses...'
+                            : (isRegister ? 'Daftar Sekarang' : 'Login')),
                       ),
                     ),
                     const SizedBox(height: 10),
@@ -144,7 +161,14 @@ class _AuthScreenState extends State<AuthScreen> {
                         onPressed: () {
                           setState(() {
                             isRegister = !isRegister;
-                            selectedRole = UserRole.customer;
+                            selectedRole = null;
+                            emailController.clear();
+                            passwordController.clear();
+                            if (isRegister) {
+                              nameController.clear();
+                              phoneController.clear();
+                              addressController.clear();
+                            }
                           });
                         },
                         child: Text(
@@ -158,44 +182,6 @@ class _AuthScreenState extends State<AuthScreen> {
                 ),
               ),
               const SizedBox(height: 18),
-              const SectionHeader(
-                title: 'Akun Demo',
-                subtitle: 'Gunakan tombol ini untuk mengisi akun cepat saat demo.',
-              ),
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: () {
-                        setState(() {
-                          isRegister = false;
-                          selectedRole = UserRole.admin;
-                          emailController.text = 'admin@zamzam.com';
-                          passwordController.text = 'Admin123!';
-                        });
-                      },
-                      icon: const Icon(Icons.admin_panel_settings_outlined),
-                      label: const Text('Admin Demo'),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: () {
-                        setState(() {
-                          isRegister = false;
-                          selectedRole = UserRole.customer;
-                          emailController.text = 'alya@zamzam.com';
-                          passwordController.text = 'Pelanggan123!';
-                        });
-                      },
-                      icon: const Icon(Icons.person_outline),
-                      label: const Text('Customer Demo'),
-                    ),
-                  ),
-                ],
-              ),
             ],
           ),
         ),
@@ -217,19 +203,66 @@ class _AuthScreenState extends State<AuthScreen> {
       if (error != null) {
         _showSnack(error);
       } else {
-        _showSnack('Registrasi berhasil. Selamat datang di ZAMZAM LAUNDRY.');
+        setState(() {
+          isRegister = false;
+          selectedRole = UserRole.customer;
+        });
+        passwordController.clear();
+        _showSnack(
+          'Registrasi berhasil. Silakan login sebagai pelanggan.',
+        );
       }
+      return;
+    }
+
+    if (selectedRole == null) {
+      _showSnack('Silakan pilih role admin atau pelanggan terlebih dahulu.');
       return;
     }
 
     final success = await app.login(
       email: emailController.text,
       password: passwordController.text,
-      role: selectedRole,
+      role: selectedRole!,
     );
     if (!mounted) return;
     if (!success) {
-      _showSnack(app.lastError ?? 'Email, password, atau role tidak sesuai.');
+      final message =
+          app.lastError ?? 'Email, password, atau role tidak sesuai.';
+      if (selectedRole == UserRole.customer &&
+          message.contains('Data pelanggan tidak ditemukan')) {
+        setState(() {
+          isRegister = true;
+          selectedRole = null;
+          emailController.clear();
+          passwordController.clear();
+          nameController.clear();
+          phoneController.clear();
+          addressController.clear();
+        });
+        _showSnack(
+          'Data pelanggan tidak ditemukan. Silakan registrasi terlebih dahulu.',
+        );
+        return;
+      }
+
+      // Log to console
+      // ignore: avoid_print
+      print('[AuthScreen] Login failed: $message');
+      // Show dialog with detailed message for debugging
+      showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Login Gagal'),
+          content: Text(message),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('Tutup')),
+          ],
+        ),
+      );
+      _showSnack(message);
     }
   }
 
