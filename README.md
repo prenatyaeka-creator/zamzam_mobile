@@ -1,52 +1,65 @@
-# Mobile App Flutter - ZAMZAM LAUNDRY
+﻿# ZAMZAM LAUNDRY - Flutter + Firebase
 
-Aplikasi ini adalah source code Flutter/Dart untuk ZAMZAM LAUNDRY.
+Aplikasi laundry sederhana berbasis Flutter dan Firebase.
 
-## Fitur utama
+Fitur utama:
 - Login admin dan pelanggan
 - Registrasi pelanggan
-- List layanan dan harga
-- Tracking laundry dan histori status
-- Chat admin-pelanggan
+- Manajemen layanan laundry
+- Tracking order dan status layanan
 - Dashboard admin
-- Manajemen layanan
-- Data pelanggan
-- Laporan transaksi
+- Chat antara pelanggan dan admin
 
-## Cara memakai SDK lokal di dalam project
-SDK lokal akan ditempatkan pada folder:
-- `../.flutter_sdk/flutter`
+## Persiapan
+1. Pastikan Flutter sudah terpasang.
+2. Jalankan:
+   ```bash
+   flutter pub get
+   ```
+3. Siapkan Firebase project untuk Android dan Web.
 
-### Windows
-```powershell
-.\tool\setup_flutter_sdk_windows.ps1
-.\tool\bootstrap_project.ps1
-.\tool\flutterw.ps1 pub get
-.\tool\flutterw.ps1 run
-```
+## Konfigurasi Firebase
+1. Tambahkan aplikasi Android dan Web di Firebase Console.
+2. Untuk Android, letakkan `google-services.json` di `android/app/`.
+3. Untuk web, isi `lib/config/app_config.dart` dengan `FirebaseOptions` dan pastikan `authDomain` benar.
+4. Pastikan Email/Password Authentication sudah diaktifkan di Firebase Auth.
 
-### Linux
+## Akun Admin dan Pelanggan
+- Customer harus register lewat aplikasi.
+- Admin harus dibuat manual di Firebase Console.
+  - Contoh email admin: `admin@zamzam.com`
+  - Password admin harus diatur sendiri di Firebase Console.
+- Setelah registrasi berhasil, pelanggan akan kembali ke login dan masuk menggunakan akun yang baru dibuat.
+
+## Menjalankan Aplikasi
+### Android
 ```bash
-chmod +x ./tool/*.sh ./tool/flutterw
-./tool/setup_flutter_sdk_linux.sh
-./tool/bootstrap_project.sh
-./tool/flutterw pub get
-./tool/flutterw run
+flutter pub get
+flutter run
 ```
 
-### macOS
+### Web
 ```bash
-chmod +x ./tool/*.sh ./tool/flutterw
-./tool/setup_flutter_sdk_macos.sh
-./tool/bootstrap_project.sh
-./tool/flutterw pub get
-./tool/flutterw run
+flutter pub get
+flutter run -d chrome
 ```
 
-## Catatan
-- Script setup SDK akan mengunduh Flutter SDK resmi ke folder project.
-- Script bootstrap akan menjalankan `flutter create . --platforms=android,ios,web` untuk membuat wrapper platform yang belum ada.
-- Setelah itu Anda bisa menjalankan project dengan wrapper `flutterw`.
+## Firebase Hosting (Opsional)
+Jika ingin deploy web:
+```bash
+flutter build web
+firebase deploy --only hosting
+```
+Pastikan `.firebaserc` sudah berisi project Firebase yang benar.
 
-## Konfigurasi API
-Edit `lib/config/app_config.dart` dan sesuaikan `baseUrl`.
+## File Penting
+- `lib/main.dart` — entry point aplikasi
+- `lib/config/app_config.dart` — konfigurasi Firebase untuk web/mobile
+- `lib/services/api_service.dart` — layanan Firebase Auth dan Firestore
+- `android/app/src/main/AndroidManifest.xml` — izin internet Android
+
+## Catatan Singkat
+- Proyek ini tidak menyediakan data demo otomatis.
+- Semua data pengguna, layanan, dan order dibuat lewat aplikasi atau Firebase Console.
+- Pastikan aturan keamanan Firestore sesuai sebelum deploy.
+
