@@ -51,14 +51,21 @@ class _AdminHomeState extends State<AdminHome> {
       ),
       bottomNavigationBar: AppBottomNavBar(
         selectedIndex: index,
-        onTap: (value) => setState(() => index = value),
-        items: const [
-          AppNavItem(icon: Icons.dashboard_outlined, label: 'Dashboard'),
-          AppNavItem(icon: Icons.sync_alt_outlined, label: 'Status'),
-          AppNavItem(icon: Icons.local_offer_outlined, label: 'Layanan'),
-          AppNavItem(icon: Icons.people_outline, label: 'Pelanggan'),
-          AppNavItem(icon: Icons.receipt_long_outlined, label: 'Laporan'),
-          AppNavItem(icon: Icons.chat_bubble_outline, label: 'Chat'),
+        onTap: (value) {
+          setState(() => index = value);
+          app.isChatActive = (value == 5);
+        },
+        items: [
+          const AppNavItem(icon: Icons.dashboard_outlined, label: 'Dashboard'),
+          const AppNavItem(icon: Icons.sync_alt_outlined, label: 'Status'),
+          const AppNavItem(icon: Icons.local_offer_outlined, label: 'Layanan'),
+          const AppNavItem(icon: Icons.people_outline, label: 'Pelanggan'),
+          const AppNavItem(icon: Icons.receipt_long_outlined, label: 'Laporan'),
+          AppNavItem(
+            icon: Icons.chat_bubble_outline,
+            label: 'Chat',
+            hasBadge: app.hasUnreadMessages,
+          ),
         ],
       ),
     );

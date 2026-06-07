@@ -507,14 +507,39 @@ class ApiService {
 
   Future<List<ChatRoom>> getChatRooms(String token) async {
     await _initialize();
+    final user = await _getUserByUid(token);
+    Query<Map<String, dynamic>> query = _chatRooms;
+    if (user.role == UserRole.customer) {
+      query = query.where('customer_id', isEqualTo: user.id);
+    }
     final snapshot =
-        await _chatRooms.orderBy('last_message_at', descending: true).get();
+        await query.orderBy('last_message_at', descending: true).get();
     return snapshot.docs
         .map((doc) => _chatRoomFromJson(_normalizeDocument({
               'id': _asInt(doc.data()['id'] ?? int.tryParse(doc.id)),
               ...doc.data()
             })))
         .toList();
+  }
+
+  Stream<List<ChatRoom>> getChatRoomsStream(String token) {
+    return Stream.fromFuture(_getUserByUid(token)).asyncExpand((user) {
+      Query<Map<String, dynamic>> query = _chatRooms;
+      if (user.role == UserRole.customer) {
+        query = query.where('customer_id', isEqualTo: user.id);
+      }
+      return query
+          .orderBy('last_message_at', descending: true)
+          .snapshots()
+          .map((snapshot) {
+        return snapshot.docs
+            .map((doc) => _chatRoomFromJson(_normalizeDocument({
+                  'id': _asInt(doc.data()['id'] ?? int.tryParse(doc.id)),
+                  ...doc.data()
+                })))
+            .toList();
+      });
+    });
   }
 
   Future<List<ChatMessage>> getChatMessages(String token, int roomId) async {
@@ -531,6 +556,25 @@ class ApiService {
               ...doc.data()
             })))
         .toList();
+  }
+
+  Stream<List<ChatMessage>> getChatMessagesStream(String token, int roomId) {
+    return Stream.fromFuture(_initialize()).asyncExpand((_) {
+      return _chatRooms
+          .doc('$roomId')
+          .collection('messages')
+          .orderBy('created_at')
+          .snapshots()
+          .map((snapshot) {
+        return snapshot.docs
+            .map((doc) => _chatMessageFromJson(_normalizeDocument({
+                  'id': _asInt(doc.data()['id'] ?? int.tryParse(doc.id)),
+                  'room_id': roomId,
+                  ...doc.data()
+                })))
+            .toList();
+      });
+    });
   }
 
   Future<ChatMessage> sendChatMessage(

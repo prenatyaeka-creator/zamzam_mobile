@@ -40,7 +40,17 @@ class RootPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final user = context.watch<AppState>().currentUser;
+    final app = context.watch<AppState>();
+    if (app.isAutoLoginCheckRunning) {
+      return const Scaffold(
+        body: Center(
+          child: CircularProgressIndicator(
+            valueColor: AlwaysStoppedAnimation<Color>(AppColors.rose),
+          ),
+        ),
+      );
+    }
+    final user = app.currentUser;
     if (user == null) {
       return const AuthScreen();
     }

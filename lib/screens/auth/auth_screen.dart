@@ -16,12 +16,26 @@ class AuthScreen extends StatefulWidget {
 class _AuthScreenState extends State<AuthScreen> {
   bool isRegister = false;
   UserRole? selectedRole;
+  bool rememberMe = false;
 
   final nameController = TextEditingController();
   final emailController = TextEditingController();
   final phoneController = TextEditingController();
   final addressController = TextEditingController();
   final passwordController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    final app = Provider.of<AppState>(context, listen: false);
+    rememberMe = app.rememberMe;
+    if (app.savedEmail != null) {
+      emailController.text = app.savedEmail!;
+    }
+    if (app.savedRole != null) {
+      selectedRole = app.savedRole;
+    }
+  }
 
   @override
   void dispose() {
@@ -117,6 +131,9 @@ class _AuthScreenState extends State<AuthScreen> {
                     TextField(
                       controller: emailController,
                       keyboardType: TextInputType.emailAddress,
+                      autocorrect: false,
+                      enableSuggestions: false,
+                      textCapitalization: TextCapitalization.none,
                       decoration: InputDecoration(
                         labelText: 'Email',
                         hintText:
@@ -142,8 +159,25 @@ class _AuthScreenState extends State<AuthScreen> {
                     TextField(
                       controller: passwordController,
                       obscureText: true,
+                      autocorrect: false,
+                      enableSuggestions: false,
+                      textCapitalization: TextCapitalization.none,
                       decoration: const InputDecoration(labelText: 'Password'),
                     ),
+                    if (!isRegister) ...[
+                      const SizedBox(height: 8),
+                      CheckboxListTile(
+                        value: rememberMe,
+                        onChanged: (val) {
+                          setState(() => rememberMe = val ?? false);
+                        },
+                        title: const Text('Ingat Akun', style: TextStyle(fontSize: 14)),
+                        contentPadding: EdgeInsets.zero,
+                        controlAffinity: ListTileControlAffinity.leading,
+                        dense: true,
+                        activeColor: AppColors.rose,
+                      ),
+                    ],
                     const SizedBox(height: 18),
                     SizedBox(
                       width: double.infinity,
@@ -224,6 +258,7 @@ class _AuthScreenState extends State<AuthScreen> {
       email: emailController.text,
       password: passwordController.text,
       role: selectedRole!,
+      remember: rememberMe,
     );
     if (!mounted) return;
     if (!success) {

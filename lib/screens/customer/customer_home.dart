@@ -50,12 +50,19 @@ class _CustomerHomeState extends State<CustomerHome> {
       ),
       bottomNavigationBar: AppBottomNavBar(
         selectedIndex: index,
-        onTap: (value) => setState(() => index = value),
-        items: const [
-          AppNavItem(icon: Icons.home_outlined, label: 'Home'),
-          AppNavItem(icon: Icons.sell_outlined, label: 'Harga'),
-          AppNavItem(icon: Icons.local_laundry_service_outlined, label: 'Tracking'),
-          AppNavItem(icon: Icons.chat_bubble_outline, label: 'Chat'),
+        onTap: (value) {
+          setState(() => index = value);
+          app.isChatActive = (value == 3);
+        },
+        items: [
+          const AppNavItem(icon: Icons.home_outlined, label: 'Home'),
+          const AppNavItem(icon: Icons.sell_outlined, label: 'Harga'),
+          const AppNavItem(icon: Icons.local_laundry_service_outlined, label: 'Tracking'),
+          AppNavItem(
+            icon: Icons.chat_bubble_outline,
+            label: 'Chat',
+            hasBadge: app.hasUnreadMessages,
+          ),
         ],
       ),
     );

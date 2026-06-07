@@ -259,13 +259,15 @@ style: TextStyle(color: Colors.grey.shade700),
 }
 
 class AppNavItem {
-const AppNavItem({
-required this.icon,
-required this.label,
-});
+  const AppNavItem({
+    required this.icon,
+    required this.label,
+    this.hasBadge = false,
+  });
 
-final IconData icon;
-final String label;
+  final IconData icon;
+  final String label;
+  final bool hasBadge;
 }
 
 class AppBottomNavBar extends StatelessWidget {
@@ -315,12 +317,30 @@ class AppBottomNavBar extends StatelessWidget {
                                     : Colors.transparent,
                                 borderRadius: BorderRadius.circular(13),
                               ),
-                              child: Icon(
-                                item.icon,
-                                size: 20,
-                                color: isSelected
-                                    ? AppColors.ink
-                                    : AppColors.ink.withOpacity(0.75),
+                              child: Stack(
+                                alignment: Alignment.center,
+                                children: [
+                                  Icon(
+                                    item.icon,
+                                    size: 20,
+                                    color: isSelected
+                                        ? AppColors.ink
+                                        : AppColors.ink.withOpacity(0.75),
+                                  ),
+                                  if (item.hasBadge)
+                                    Positioned(
+                                      top: 4,
+                                      right: 4,
+                                      child: Container(
+                                        width: 8,
+                                        height: 8,
+                                        decoration: const BoxDecoration(
+                                          color: Colors.red,
+                                          shape: BoxShape.circle,
+                                        ),
+                                      ),
+                                    ),
+                                ],
                               ),
                             ),
                             const SizedBox(height: 2),

@@ -1,18 +1,51 @@
 import 'dart:async';
 
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/formatters.dart';
 import '../models/app_models.dart';
 import '../services/api_service.dart';
+import '../services/notification_service.dart';
 
 class AppState extends ChangeNotifier {
+  AppState() {
+    tryAutoLogin();
+  }
+
   final ApiService _api = ApiService();
 
   AppUser? currentUser;
   String? _token;
   bool isBusy = false;
   String? lastError;
+
+  bool isAutoLoginCheckRunning = true;
+  bool rememberMe = false;
+  String? savedEmail;
+  UserRole? savedRole;
+
+  StreamSubscription<List<ChatRoom>>? _roomsSubscription;
+  StreamSubscription<List<ChatMessage>>? _messagesSubscription;
+  int? _subscribedRoomId;
+  DateTime? _chatStreamInitTime;
+  final Set<int> _notifiedMessageIds = <int>{};
+  final Map<int, DateTime> _lastSeenMessageTimes = <int, DateTime>{};
+  bool _hasUnreadMessages = false;
+  bool _isChatActive = false;
+
+  bool get hasUnreadMessages => _hasUnreadMessages;
+  bool get isChatActive => _isChatActive;
+  set isChatActive(bool value) {
+    if (_isChatActive != value) {
+      _isChatActive = value;
+      if (value) {
+        _hasUnreadMessages = false;
+      }
+      notifyListeners();
+    }
+  }
 
   int? _selectedAdminRoomId;
 
@@ -25,6 +58,44 @@ class AppState extends ChangeNotifier {
   final List<ChatRoom> _chatRooms = <ChatRoom>[];
   final Map<int, List<ChatMessage>> _messagesByRoom =
       <int, List<ChatMessage>>{};
+
+  Future<void> tryAutoLogin() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      rememberMe = prefs.getBool('remember_me') ?? false;
+      savedEmail = prefs.getString('saved_email');
+      final savedRoleStr = prefs.getString('saved_role');
+      if (savedRoleStr != null) {
+        savedRole = savedRoleStr == 'admin' ? UserRole.admin : UserRole.customer;
+      }
+
+      if (rememberMe) {
+        final firebaseUser = FirebaseAuth.instance.currentUser;
+        if (firebaseUser != null) {
+          // pre-initialize so me() doesn't throw if firestore is not ready
+          final user = await _api.me(firebaseUser.uid);
+          if (user.isActive && (savedRole == null || user.role == savedRole)) {
+            currentUser = user;
+            _token = firebaseUser.uid;
+            unawaited(NotificationService.instance.requestPermission());
+            unawaited(_loadInitialData());
+          } else {
+            await _api.signOut();
+          }
+        }
+      } else {
+        if (FirebaseAuth.instance.currentUser != null) {
+          await _api.signOut();
+        }
+      }
+    } catch (e) {
+      // ignore: avoid_print
+      print('[AppState] Auto-login error: $e');
+    } finally {
+      isAutoLoginCheckRunning = false;
+      notifyListeners();
+    }
+  }
 
   int _dashboardActiveOrders = 0;
   double _dashboardMonthlyRevenue = 0;
@@ -107,6 +178,7 @@ class AppState extends ChangeNotifier {
     required String email,
     required String password,
     required UserRole role,
+    bool remember = false,
   }) async {
     await _guard(() async {
       // Log login attempt for debugging
@@ -125,6 +197,24 @@ class AppState extends ChangeNotifier {
       }
       currentUser = result.user;
       _token = result.token;
+      rememberMe = remember;
+      unawaited(NotificationService.instance.requestPermission());
+
+      final prefs = await SharedPreferences.getInstance();
+      if (remember) {
+        await prefs.setBool('remember_me', true);
+        await prefs.setString('saved_email', email.trim());
+        await prefs.setString('saved_role', role == UserRole.admin ? 'admin' : 'customer');
+        savedEmail = email.trim();
+        savedRole = role;
+      } else {
+        await prefs.setBool('remember_me', false);
+        await prefs.remove('saved_email');
+        await prefs.remove('saved_role');
+        savedEmail = null;
+        savedRole = null;
+      }
+
       notifyListeners();
       // ignore: avoid_print
       print(
@@ -160,6 +250,7 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> logout() async {
+    _cancelChatSubscriptions();
     await _api.signOut();
     currentUser = null;
     _token = null;
@@ -174,6 +265,14 @@ class AppState extends ChangeNotifier {
     _messagesByRoom.clear();
     _dashboardActiveOrders = 0;
     _dashboardMonthlyRevenue = 0;
+    _hasUnreadMessages = false;
+    _isChatActive = false;
+    _lastSeenMessageTimes.clear();
+
+    rememberMe = false;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('remember_me', false);
+
     notifyListeners();
   }
 
@@ -184,7 +283,7 @@ class AppState extends ChangeNotifier {
 
     await refreshServices();
     await refreshOrders();
-    await refreshChatRooms();
+    _setupChatListeners();
 
     if (currentUser!.role == UserRole.admin) {
       await refreshCustomers();
@@ -381,10 +480,6 @@ class AppState extends ChangeNotifier {
         customerId: customerId,
       );
       final targetRoomId = sent.roomId;
-      final bucket =
-          _messagesByRoom.putIfAbsent(targetRoomId, () => <ChatMessage>[]);
-      bucket.add(sent);
-      await refreshChatRooms();
       if (currentUser?.role == UserRole.admin) {
         _selectedAdminRoomId = targetRoomId;
       }
@@ -393,12 +488,119 @@ class AppState extends ChangeNotifier {
 
   void selectAdminRoom(int roomId) {
     _selectedAdminRoomId = roomId;
+    _updateMessageSubscription(roomId);
     notifyListeners();
+  }
+
+  void _cancelChatSubscriptions() {
+    _roomsSubscription?.cancel();
+    _roomsSubscription = null;
+    _messagesSubscription?.cancel();
+    _messagesSubscription = null;
+    _subscribedRoomId = null;
+  }
+
+  void _setupChatListeners() {
+    _cancelChatSubscriptions();
+    if (_token == null) return;
+    _chatStreamInitTime = DateTime.now();
+    _lastSeenMessageTimes.clear();
+
+    _roomsSubscription = _api.getChatRoomsStream(_token!).listen((rooms) {
+      if (rooms.isNotEmpty) {
+        bool hasNewExternalMessage = false;
+        for (final room in rooms) {
+          final lastSeen = _lastSeenMessageTimes[room.id];
+          if (lastSeen == null) {
+            _lastSeenMessageTimes[room.id] = room.lastMessageAt;
+          } else if (room.lastMessageAt.isAfter(lastSeen)) {
+            _lastSeenMessageTimes[room.id] = room.lastMessageAt;
+
+            if (room.lastMessage != 'Mulai chat dengan admin.') {
+              if (currentUser?.role == UserRole.customer) {
+                if (!_isChatActive) {
+                  hasNewExternalMessage = true;
+                }
+              } else if (currentUser?.role == UserRole.admin) {
+                if (!_isChatActive || _selectedAdminRoomId != room.id) {
+                  hasNewExternalMessage = true;
+                }
+              }
+            }
+          }
+        }
+        if (hasNewExternalMessage) {
+          _hasUnreadMessages = true;
+        }
+      }
+
+      _chatRooms
+        ..clear()
+        ..addAll(rooms);
+
+      if (currentUser?.role == UserRole.admin) {
+        if (_selectedAdminRoomId == null && rooms.isNotEmpty) {
+          _selectedAdminRoomId = rooms.first.id;
+        }
+        if (_selectedAdminRoomId != null) {
+          _updateMessageSubscription(_selectedAdminRoomId!);
+        }
+      } else if (currentUser?.role == UserRole.customer) {
+        final room = ensureRoomForCustomer(currentUser!.id);
+        if (room.id > 0) {
+          _updateMessageSubscription(room.id);
+        }
+      }
+      notifyListeners();
+    }, onError: (err) {
+      // ignore: avoid_print
+      print('[AppState] Chat rooms stream error: $err');
+    });
+  }
+
+  void _updateMessageSubscription(int roomId) {
+    if (_subscribedRoomId == roomId) return;
+    _messagesSubscription?.cancel();
+    _messagesSubscription = null;
+    _subscribedRoomId = roomId;
+
+    if (roomId > 0) {
+      _messagesSubscription = _api
+          .getChatMessagesStream(_token!, roomId)
+          .listen((messages) {
+        _messagesByRoom[roomId] = messages;
+        notifyListeners();
+
+        // Trigger local notification for real-time incoming messages
+        if (_chatStreamInitTime != null && messages.isNotEmpty) {
+          final lastMessage = messages.last;
+          if (lastMessage.senderId != currentUser?.id &&
+              lastMessage.sentAt.isAfter(_chatStreamInitTime!)) {
+            if (_notifiedMessageIds.add(lastMessage.id)) {
+              if (!_isChatActive) {
+                _hasUnreadMessages = true;
+              }
+              unawaited(NotificationService.instance.showChatNotification(
+                id: lastMessage.id,
+                senderName: lastMessage.senderName,
+                messageText: lastMessage.text,
+              ));
+            }
+          }
+        }
+      }, onError: (err) {
+        // ignore: avoid_print
+        print('[AppState] Chat messages stream error: $err');
+      });
+    }
   }
 
   ChatRoom ensureRoomForCustomer(int customerId) {
     if (_chatRooms.isNotEmpty) {
-      return _chatRooms.first;
+      final matches = _chatRooms.where((room) => room.customerId == customerId);
+      if (matches.isNotEmpty) {
+        return matches.first;
+      }
     }
     return ChatRoom(
       id: 0,
