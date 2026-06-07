@@ -111,7 +111,18 @@ DateTime? _nullableDate(dynamic value) {
 
 int _int(dynamic value) {
   if (value is int) return value;
-  return int.tryParse(value?.toString() ?? '') ?? 0;
+  if (value == null) return 0;
+  final str = value.toString();
+  final parsed = int.tryParse(str);
+  if (parsed != null) return parsed;
+  if (str.isNotEmpty) {
+    int hash = 0;
+    for (int i = 0; i < str.length; i++) {
+      hash = (31 * hash + str.codeUnitAt(i)) & 0xFFFFFFFF;
+    }
+    return hash;
+  }
+  return 0;
 }
 
 double _double(dynamic value) {
@@ -146,8 +157,12 @@ class AppUser {
   bool isActive;
 
   factory AppUser.fromJson(Map<String, dynamic> json) {
+    int parsedId = _int(json['id']);
+    if (parsedId == 0 && json['uid'] != null) {
+      parsedId = _int(json['uid']);
+    }
     return AppUser(
-      id: _int(json['id']),
+      id: parsedId,
       name: json['name']?.toString() ?? '',
       email: json['email']?.toString() ?? '',
       phone: json['phone']?.toString() ?? '',

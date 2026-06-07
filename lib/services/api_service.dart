@@ -53,7 +53,18 @@ class ApiService {
 
   int _asInt(dynamic value) {
     if (value is int) return value;
-    return int.tryParse(value?.toString() ?? '') ?? 0;
+    if (value == null) return 0;
+    final str = value.toString();
+    final parsed = int.tryParse(str);
+    if (parsed != null) return parsed;
+    if (str.isNotEmpty) {
+      int hash = 0;
+      for (int i = 0; i < str.length; i++) {
+        hash = (31 * hash + str.codeUnitAt(i)) & 0xFFFFFFFF;
+      }
+      return hash;
+    }
+    return 0;
   }
 
   double _asDouble(dynamic value) {
@@ -83,7 +94,15 @@ class ApiService {
     if (snapshot.docs.isEmpty) {
       throw ApiException('Pengguna tidak ditemukan di Firebase.');
     }
-    return _userFromJson(_normalizeDocument(snapshot.docs.first.data()));
+    final docData = snapshot.docs.first.data();
+    int id = _asInt(docData['id']);
+    if (id == 0) {
+      id = _asInt(docData['uid'] ?? snapshot.docs.first.id);
+    }
+    return _userFromJson(_normalizeDocument({
+      'id': id,
+      ...docData
+    }));
   }
 
   Future<AppUser> _createAdminUser(String uid, {String? email}) async {
@@ -104,8 +123,12 @@ class ApiService {
   }
 
   AppUser _userFromJson(Map<String, dynamic> json) {
+    int id = _asInt(json['id']);
+    if (id == 0 && json['uid'] != null) {
+      id = _asInt(json['uid']);
+    }
     return AppUser(
-      id: _asInt(json['id']),
+      id: id,
       name: json['name']?.toString() ?? '',
       email: json['email']?.toString() ?? '',
       phone: json['phone']?.toString() ?? '',
@@ -423,10 +446,17 @@ class ApiService {
         .where('role', isEqualTo: 'customer')
         .get();
     final list = snapshot.docs
-        .map((doc) => _userFromJson(_normalizeDocument({
-              'id': _asInt(doc.data()['id'] ?? int.tryParse(doc.id)),
-              ...doc.data()
-            })))
+        .map((doc) {
+          final docData = doc.data();
+          int id = _asInt(docData['id']);
+          if (id == 0) {
+            id = _asInt(docData['uid'] ?? doc.id);
+          }
+          return _userFromJson(_normalizeDocument({
+            'id': id,
+            ...docData
+          }));
+        })
         .where((user) => user.isActive)
         .toList();
     list.sort((a, b) => a.name.compareTo(b.name));
