@@ -545,14 +545,15 @@ class ApiService {
     if (user.role == UserRole.customer) {
       query = query.where('customer_id', isEqualTo: user.id);
     }
-    final snapshot =
-        await query.orderBy('last_message_at', descending: true).get();
-    return snapshot.docs
+    final snapshot = await query.get();
+    final list = snapshot.docs
         .map((doc) => _chatRoomFromJson(_normalizeDocument({
               'id': _asInt(doc.data()['id'] ?? int.tryParse(doc.id)),
               ...doc.data()
             })))
         .toList();
+    list.sort((a, b) => b.lastMessageAt.compareTo(a.lastMessageAt));
+    return list;
   }
 
   Stream<List<ChatRoom>> getChatRoomsStream(String token) {
@@ -561,16 +562,15 @@ class ApiService {
       if (user.role == UserRole.customer) {
         query = query.where('customer_id', isEqualTo: user.id);
       }
-      return query
-          .orderBy('last_message_at', descending: true)
-          .snapshots()
-          .map((snapshot) {
-        return snapshot.docs
+      return query.snapshots().map((snapshot) {
+        final list = snapshot.docs
             .map((doc) => _chatRoomFromJson(_normalizeDocument({
                   'id': _asInt(doc.data()['id'] ?? int.tryParse(doc.id)),
                   ...doc.data()
                 })))
             .toList();
+        list.sort((a, b) => b.lastMessageAt.compareTo(a.lastMessageAt));
+        return list;
       });
     });
   }

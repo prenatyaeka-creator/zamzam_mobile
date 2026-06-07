@@ -480,6 +480,23 @@ class AppState extends ChangeNotifier {
         customerId: customerId,
       );
       final targetRoomId = sent.roomId;
+
+      if (currentUser?.role == UserRole.customer) {
+        final hasRoom = _chatRooms.any((r) => r.customerId == currentUser!.id);
+        if (!hasRoom) {
+          final newRoom = ChatRoom(
+            id: targetRoomId,
+            customerId: currentUser!.id,
+            adminId: 1,
+            title: 'Admin ZAMZAM',
+            lastMessage: trimmed,
+            lastMessageAt: DateTime.now(),
+          );
+          _chatRooms.add(newRoom);
+          _updateMessageSubscription(targetRoomId);
+        }
+      }
+
       if (currentUser?.role == UserRole.admin) {
         _selectedAdminRoomId = targetRoomId;
       }
