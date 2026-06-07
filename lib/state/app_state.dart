@@ -169,9 +169,9 @@ class AppState extends ChangeNotifier {
   }
 
   double get unpaidRevenue {
-    return _transactions
-        .where((entry) => entry.status == PaymentStatus.unpaid)
-        .fold<double>(0, (sum, item) => sum + item.amount);
+    return _orders
+        .where((order) => order.paymentStatus == PaymentStatus.unpaid && order.status != OrderStatus.cancelled)
+        .fold<double>(0, (sum, item) => sum + item.totalPrice);
   }
 
   Future<bool> login({
