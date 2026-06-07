@@ -683,6 +683,68 @@ class AppState extends ChangeNotifier {
         .fold<double>(0, (sum, item) => sum + item.amount);
   }
 
+  Future<void> createOrder({
+    required int customerId,
+    required int serviceId,
+    required double quantity,
+    required double totalPrice,
+    required String notes,
+    required bool isPaid,
+    String paymentMethod = 'Cash',
+  }) async {
+    if (_token == null) return;
+    await _guard(() async {
+      await _api.createOrder(
+        _token!,
+        customerId: customerId,
+        serviceId: serviceId,
+        quantity: quantity,
+        totalPrice: totalPrice,
+        notes: notes,
+        isPaid: isPaid,
+        paymentMethod: paymentMethod,
+      );
+      await refreshOrders();
+      if (currentUser?.role == UserRole.admin) {
+        await refreshDashboard();
+        await refreshReports();
+      }
+    });
+  }
+
+  Future<void> markOrderAsPaid({
+    required int orderId,
+    required double amount,
+    required String paymentMethod,
+  }) async {
+    if (_token == null) return;
+    await _guard(() async {
+      await _api.markOrderAsPaid(
+        _token!,
+        orderId: orderId,
+        amount: amount,
+        paymentMethod: paymentMethod,
+      );
+      await refreshOrders();
+      if (currentUser?.role == UserRole.admin) {
+        await refreshDashboard();
+        await refreshReports();
+      }
+    });
+  }
+
+  Future<void> deleteOrder(int orderId) async {
+    if (_token == null) return;
+    await _guard(() async {
+      await _api.deleteOrder(_token!, orderId);
+      await refreshOrders();
+      if (currentUser?.role == UserRole.admin) {
+        await refreshDashboard();
+        await refreshReports();
+      }
+    });
+  }
+
   String currency(num value) => formatCurrency(value);
   String dateTime(DateTime value) => formatDateTime(value);
   String shortDate(DateTime value) => formatShortDate(value);

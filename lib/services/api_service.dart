@@ -778,6 +778,19 @@ class ApiService {
     await _transactions.doc('$transactionId').set(transactionData);
   }
 
+  Future<void> deleteOrder(String token, int orderId) async {
+    await _initialize();
+    final historiesSnapshot = await _orders.doc('$orderId').collection('histories').get();
+    for (final doc in historiesSnapshot.docs) {
+      await doc.reference.delete();
+    }
+    final transSnapshot = await _transactions.where('order_id', isEqualTo: orderId).get();
+    for (final doc in transSnapshot.docs) {
+      await doc.reference.delete();
+    }
+    await _orders.doc('$orderId').delete();
+  }
+
   Future<void> signOut() async {
     await _auth.signOut();
   }

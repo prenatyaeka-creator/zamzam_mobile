@@ -166,9 +166,14 @@ class _AdminHomeState extends State<AdminHome> {
     final orders = app.allOrdersSorted;
 
     return _pageList([
-      const SectionHeader(
+      SectionHeader(
         title: 'Update Status Laundry',
         subtitle: 'Admin dapat memperbarui status pesanan pelanggan secara langsung.',
+        action: ElevatedButton.icon(
+          onPressed: () => _showCreateOrderDialog(app),
+          icon: const Icon(Icons.add_shopping_cart_rounded),
+          label: const Text('Tambah'),
+        ),
       ),
       const SizedBox(height: 10),
       ...orders.map(
@@ -199,13 +204,23 @@ class _AdminHomeState extends State<AdminHome> {
                         ),
                       ),
                       const SizedBox(width: 8),
-                      Flexible(
-                        child: PillChip(
-                          text: order.paymentStatus.label,
-                          color: order.paymentStatus == PaymentStatus.paid
-                              ? AppColors.sage
-                              : Colors.orange.shade100,
-                        ),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          PillChip(
+                            text: order.paymentStatus.label,
+                            color: order.paymentStatus == PaymentStatus.paid
+                                ? AppColors.sage
+                                : Colors.orange.shade100,
+                          ),
+                          const SizedBox(height: 8),
+                          IconButton(
+                            constraints: const BoxConstraints(),
+                            padding: EdgeInsets.zero,
+                            icon: Icon(Icons.delete_outline, color: Colors.red.shade700, size: 20),
+                            onPressed: () => _confirmDeleteOrder(context, app, order),
+                          ),
+                        ],
                       ),
                     ],
                   ),
@@ -213,22 +228,40 @@ class _AdminHomeState extends State<AdminHome> {
                   Text('Qty: ${order.quantity} ${service.unit}'),
                   Text('Total: ${app.currency(order.totalPrice)}'),
                   const SizedBox(height: 12),
-                  DropdownButtonFormField<OrderStatus>(
-                    value: order.status,
-                    decoration: const InputDecoration(labelText: 'Status Laundry'),
-                    items: OrderStatus.values
-                        .map(
-                          (status) => DropdownMenuItem<OrderStatus>(
-                            value: status,
-                            child: Text(status.label),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: DropdownButtonFormField<OrderStatus>(
+                          value: order.status,
+                          decoration: const InputDecoration(labelText: 'Status Laundry'),
+                          items: OrderStatus.values
+                              .map(
+                                (status) => DropdownMenuItem<OrderStatus>(
+                                  value: status,
+                                  child: Text(status.label),
+                                ),
+                              )
+                              .toList(),
+                          onChanged: (value) {
+                            if (value != null) {
+                              app.updateOrderStatus(order.id, value);
+                            }
+                          },
+                        ),
+                      ),
+                      if (order.paymentStatus == PaymentStatus.unpaid) ...[
+                        const SizedBox(width: 10),
+                        ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.sage,
+                            foregroundColor: AppColors.ink,
                           ),
-                        )
-                        .toList(),
-                    onChanged: (value) {
-                      if (value != null) {
-                        app.updateOrderStatus(order.id, value);
-                      }
-                    },
+                          onPressed: () => _showPaymentDialog(app, order),
+                          icon: const Icon(Icons.payments_outlined, size: 18),
+                          label: const Text('Bayar'),
+                        ),
+                      ],
+                    ],
                   ),
                 ],
               ),
@@ -731,5 +764,239 @@ const SizedBox(height: 10),
         ],
       ),
     );
+  }
+
+  Future<void> _showCreateOrderDialog(AppState app) async {
+    int? selectedCustomerId = app.customers.isNotEmpty ? app.customers.first.id : null;
+    int? selectedServiceId = app.activeServices.isNotEmpty ? app.activeServices.first.id : null;
+    final qtyController = TextEditingController(text: '1');
+    final notesController = TextEditingController();
+    bool isPaid = false;
+    String paymentMethod = 'Cash';
+
+    await showDialog<void>(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            final selectedService = selectedServiceId != null ? app.getService(selectedServiceId!) : null;
+            final qty = double.tryParse(qtyController.text.trim()) ?? 0;
+            final totalPrice = selectedService != null ? selectedService.price * qty : 0.0;
+
+            return AlertDialog(
+              title: const Text('Tambah Order Baru'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (app.customers.isEmpty)
+                      Text(
+                        'Belum ada pelanggan aktif. Pelanggan harus terdaftar terlebih dahulu.',
+                        style: TextStyle(color: Colors.red.shade700),
+                      )
+                    else
+                      DropdownButtonFormField<int>(
+                        value: selectedCustomerId,
+                        decoration: const InputDecoration(labelText: 'Pilih Pelanggan'),
+                        items: app.customers.map((c) {
+                          return DropdownMenuItem<int>(
+                            value: c.id,
+                            child: Text(c.name),
+                          );
+                        }).toList(),
+                        onChanged: (val) {
+                          setDialogState(() => selectedCustomerId = val);
+                        },
+                      ),
+                    const SizedBox(height: 10),
+                    if (app.activeServices.isEmpty)
+                      Text(
+                        'Belum ada layanan aktif.',
+                        style: TextStyle(color: Colors.red.shade700),
+                      )
+                    else
+                      DropdownButtonFormField<int>(
+                        value: selectedServiceId,
+                        decoration: const InputDecoration(labelText: 'Pilih Layanan'),
+                        items: app.activeServices.map((s) {
+                          return DropdownMenuItem<int>(
+                            value: s.id,
+                            child: Text('${s.name} (${app.currency(s.price)}/${s.unit})'),
+                          );
+                        }).toList(),
+                        onChanged: (val) {
+                          setDialogState(() => selectedServiceId = val);
+                        },
+                      ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: qtyController,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      decoration: const InputDecoration(labelText: 'Kuantitas/Berat'),
+                      onChanged: (_) => setDialogState(() {}),
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: notesController,
+                      decoration: const InputDecoration(labelText: 'Catatan'),
+                    ),
+                    const SizedBox(height: 10),
+                    CheckboxListTile(
+                      title: const Text('Sudah Bayar (Lunas)'),
+                      value: isPaid,
+                      controlAffinity: ListTileControlAffinity.leading,
+                      contentPadding: EdgeInsets.zero,
+                      onChanged: (val) {
+                        setDialogState(() => isPaid = val ?? false);
+                      },
+                    ),
+                    if (isPaid) ...[
+                      const SizedBox(height: 10),
+                      DropdownButtonFormField<String>(
+                        value: paymentMethod,
+                        decoration: const InputDecoration(labelText: 'Metode Pembayaran'),
+                        items: const [
+                          DropdownMenuItem(value: 'Cash', child: Text('Cash')),
+                          DropdownMenuItem(value: 'Transfer', child: Text('Transfer')),
+                        ],
+                        onChanged: (val) {
+                          if (val != null) {
+                            setDialogState(() => paymentMethod = val);
+                          }
+                        },
+                      ),
+                    ],
+                    const SizedBox(height: 20),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: AppColors.snow,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text('Total Harga:', style: TextStyle(fontWeight: FontWeight.w700)),
+                          Text(
+                            app.currency(totalPrice),
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w800,
+                              color: AppColors.rose,
+                              fontSize: 16,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Batal'),
+                ),
+                ElevatedButton(
+                  onPressed: (selectedCustomerId == null || selectedServiceId == null || qty <= 0)
+                      ? null
+                      : () {
+                          Navigator.pop(context);
+                          app.createOrder(
+                            customerId: selectedCustomerId!,
+                            serviceId: selectedServiceId!,
+                            quantity: qty,
+                            totalPrice: totalPrice,
+                            notes: notesController.text,
+                            isPaid: isPaid,
+                            paymentMethod: paymentMethod,
+                          );
+                        },
+                  child: const Text('Simpan'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _showPaymentDialog(AppState app, LaundryOrder order) async {
+    String paymentMethod = 'Cash';
+
+    await showDialog<void>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Text('Pembayaran ${order.invoiceNo}'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('Total tagihan: ${app.currency(order.totalPrice)}'),
+              const SizedBox(height: 15),
+              DropdownButtonFormField<String>(
+                value: paymentMethod,
+                decoration: const InputDecoration(labelText: 'Metode Pembayaran'),
+                items: const [
+                  DropdownMenuItem(value: 'Cash', child: Text('Cash')),
+                  DropdownMenuItem(value: 'Transfer', child: Text('Transfer')),
+                ],
+                onChanged: (val) {
+                  if (val != null) {
+                    setDialogState(() => paymentMethod = val);
+                  }
+                },
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Batal')),
+            ElevatedButton(
+              onPressed: () async {
+                await app.markOrderAsPaid(
+                  orderId: order.id,
+                  amount: order.totalPrice,
+                  paymentMethod: paymentMethod,
+                );
+                if (context.mounted) {
+                  Navigator.pop(context);
+                }
+              },
+              child: const Text('Tandai Lunas'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _confirmDeleteOrder(BuildContext context, AppState app, LaundryOrder order) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Hapus Orderan'),
+        content: Text('Apakah Anda yakin ingin menghapus orderan ${order.invoiceNo}? Tindakan ini tidak dapat dibatalkan.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Batal'),
+          ),
+          TextButton(
+            style: TextButton.styleFrom(foregroundColor: Colors.red.shade700),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Hapus'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      await app.deleteOrder(order.id);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Orderan ${order.invoiceNo} berhasil dihapus')),
+        );
+      }
+    }
   }
 }

@@ -48,6 +48,14 @@ class _CustomerHomeState extends State<CustomerHome> {
         padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
         child: IndexedStack(index: index, children: pages),
       ),
+      floatingActionButton: index == 2
+          ? FloatingActionButton(
+              onPressed: () => _showCreateOrderDialog(app),
+              backgroundColor: AppColors.rose,
+              foregroundColor: Colors.white,
+              child: const Icon(Icons.add_rounded),
+            )
+          : null,
       bottomNavigationBar: AppBottomNavBar(
         selectedIndex: index,
         onTap: (value) {
@@ -461,6 +469,119 @@ class _CustomerHomeState extends State<CustomerHome> {
         ),
         const SizedBox(height: 8),
       ],
+    );
+  }
+
+  Future<void> _showCreateOrderDialog(AppState app) async {
+    int? selectedServiceId = app.activeServices.isNotEmpty ? app.activeServices.first.id : null;
+    final qtyController = TextEditingController(text: '1');
+    final notesController = TextEditingController();
+
+    await showDialog<void>(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            final selectedService = selectedServiceId != null ? app.getService(selectedServiceId!) : null;
+            final qty = double.tryParse(qtyController.text.trim()) ?? 0;
+            final estimatedPrice = selectedService != null ? selectedService.price * qty : 0.0;
+
+            return AlertDialog(
+              title: const Text('Buat Pesanan Laundry'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (app.activeServices.isEmpty)
+                      Text(
+                        'Belum ada layanan aktif saat ini.',
+                        style: TextStyle(color: Colors.red.shade700),
+                      )
+                    else
+                      DropdownButtonFormField<int>(
+                        value: selectedServiceId,
+                        decoration: const InputDecoration(labelText: 'Pilih Layanan'),
+                        items: app.activeServices.map((s) {
+                          return DropdownMenuItem<int>(
+                            value: s.id,
+                            child: Text('${s.name} (${app.currency(s.price)}/${s.unit})'),
+                          );
+                        }).toList(),
+                        onChanged: (val) {
+                          setDialogState(() => selectedServiceId = val);
+                        },
+                      ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: qtyController,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      decoration: const InputDecoration(
+                        labelText: 'Estimasi Kuantitas/Berat',
+                        hintText: 'Masukkan berat/jumlah pengerjaan',
+                      ),
+                      onChanged: (_) => setDialogState(() {}),
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: notesController,
+                      decoration: const InputDecoration(
+                        labelText: 'Catatan Tambahan',
+                        hintText: 'Misal: Setrika rapi, wangi floral, dll.',
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: AppColors.snow,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text('Estimasi Total:', style: TextStyle(fontWeight: FontWeight.w700)),
+                          Text(
+                            app.currency(estimatedPrice),
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w800,
+                              color: AppColors.rose,
+                              fontSize: 16,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Batal'),
+                ),
+                ElevatedButton(
+                  onPressed: (selectedServiceId == null || qty <= 0)
+                      ? null
+                      : () {
+                          final user = app.currentUser;
+                          if (user == null) return;
+                          Navigator.pop(context);
+                          app.createOrder(
+                            customerId: user.id,
+                            serviceId: selectedServiceId!,
+                            quantity: qty,
+                            totalPrice: estimatedPrice,
+                            notes: notesController.text,
+                            isPaid: false,
+                          );
+                        },
+                  child: const Text('Pesan Sekarang'),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 }
