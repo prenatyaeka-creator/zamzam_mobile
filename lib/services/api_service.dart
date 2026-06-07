@@ -332,13 +332,15 @@ class ApiService {
     if (customerId != null && customerId > 0) {
       query = query.where('customer_id', isEqualTo: customerId);
     }
-    final snapshot = await query.orderBy('created_at', descending: true).get();
-    return snapshot.docs
+    final snapshot = await query.get();
+    final list = snapshot.docs
         .map((doc) => _orderFromJson(_normalizeDocument({
               'id': _asInt(doc.data()['id'] ?? int.tryParse(doc.id)),
               ...doc.data()
             })))
         .toList();
+    list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    return list;
   }
 
   Future<OrderDetailPayload> getOrderDetail(String token, int id) async {
@@ -419,15 +421,16 @@ class ApiService {
     await _initialize();
     final snapshot = await _users
         .where('role', isEqualTo: 'customer')
-        .where('is_active', isEqualTo: true)
-        .orderBy('name')
         .get();
-    return snapshot.docs
+    final list = snapshot.docs
         .map((doc) => _userFromJson(_normalizeDocument({
               'id': _asInt(doc.data()['id'] ?? int.tryParse(doc.id)),
               ...doc.data()
             })))
+        .where((user) => user.isActive)
         .toList();
+    list.sort((a, b) => a.name.compareTo(b.name));
+    return list;
   }
 
   Future<Map<String, dynamic>> getDashboard(String token) async {
@@ -659,6 +662,120 @@ class ApiService {
     };
     await _chatRooms.doc('$newRoomId').set(data);
     return _chatRoomFromJson(_normalizeDocument(data));
+  }
+
+  Future<LaundryOrder> createOrder(
+    String token, {
+    required int customerId,
+    required int serviceId,
+    required double quantity,
+    required double totalPrice,
+    required String notes,
+    required bool isPaid,
+    String paymentMethod = 'Cash',
+  }) async {
+    await _initialize();
+    final user = await _getUserByUid(token);
+
+    // Get customer name and phone
+    final customerSnapshot = await _users.where('id', isEqualTo: customerId).limit(1).get();
+    final customerName = customerSnapshot.docs.isNotEmpty
+        ? customerSnapshot.docs.first.data()['name']?.toString() ?? 'Pelanggan'
+        : 'Pelanggan';
+    final customerPhone = customerSnapshot.docs.isNotEmpty
+        ? customerSnapshot.docs.first.data()['phone']?.toString() ?? '-'
+        : '-';
+
+    // Get service name
+    final serviceDoc = await _services.doc('$serviceId').get();
+    final serviceName = serviceDoc.data()?['service_name']?.toString() ?? 'Layanan';
+
+    final id = _nextId();
+    final dateStr = DateTime.now().toString().replaceAll(RegExp(r'[^0-9]'), '').substring(0, 8);
+    final invoiceNo = 'INV-$dateStr-${id.toString().substring(id.toString().length - 4)}';
+
+    final orderData = {
+      'id': id,
+      'invoice_no': invoiceNo,
+      'customer_id': customerId,
+      'service_id': serviceId,
+      'qty': quantity,
+      'total_price': totalPrice,
+      'payment_status': isPaid ? 'paid' : 'unpaid',
+      'order_status': 'pending',
+      'notes': notes,
+      'created_at': FieldValue.serverTimestamp(),
+      'customer_name': customerName,
+      'customer_phone': customerPhone,
+      'service_name': serviceName,
+    };
+
+    // 1. Create order
+    await _orders.doc('$id').set(orderData);
+
+    // 2. Create history
+    final historyId = _nextId();
+    final statusData = {
+      'id': historyId,
+      'order_id': id,
+      'status': 'pending',
+      'note': 'Order dibuat.',
+      'created_by_name': user.name,
+      'created_at': FieldValue.serverTimestamp(),
+    };
+    await _orders.doc('$id').collection('histories').doc('$historyId').set(statusData);
+
+    // 3. Create transaction if paid
+    if (isPaid) {
+      final transactionId = _nextId();
+      final transactionData = {
+        'id': transactionId,
+        'order_id': id,
+        'customer_id': customerId,
+        'invoice_no': invoiceNo,
+        'amount': totalPrice,
+        'payment_method': paymentMethod,
+        'payment_status': 'paid',
+        'paid_at': FieldValue.serverTimestamp(),
+        'created_at': FieldValue.serverTimestamp(),
+      };
+      await _transactions.doc('$transactionId').set(transactionData);
+    }
+
+    return _orderFromJson(_normalizeDocument(orderData));
+  }
+
+  Future<void> markOrderAsPaid(
+    String token, {
+    required int orderId,
+    required double amount,
+    required String paymentMethod,
+  }) async {
+    await _initialize();
+
+    // 1. Update payment_status to 'paid' in the orders collection
+    await _orders.doc('$orderId').update({
+      'payment_status': 'paid',
+    });
+
+    // 2. Create transaction doc in transactions collection
+    final transactionId = _nextId();
+    final orderDoc = await _orders.doc('$orderId').get();
+    final customerId = _asInt(orderDoc.data()?['customer_id']);
+    final invoiceNo = orderDoc.data()?['invoice_no']?.toString() ?? '';
+
+    final transactionData = {
+      'id': transactionId,
+      'order_id': orderId,
+      'customer_id': customerId,
+      'invoice_no': invoiceNo,
+      'amount': amount,
+      'payment_method': paymentMethod,
+      'payment_status': 'paid',
+      'paid_at': FieldValue.serverTimestamp(),
+      'created_at': FieldValue.serverTimestamp(),
+    };
+    await _transactions.doc('$transactionId').set(transactionData);
   }
 
   Future<void> signOut() async {
