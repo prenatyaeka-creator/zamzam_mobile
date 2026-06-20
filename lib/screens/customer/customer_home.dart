@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/app_theme.dart';
 import '../../models/app_models.dart';
@@ -18,10 +20,164 @@ class _CustomerHomeState extends State<CustomerHome> {
   final chatController = TextEditingController();
   final Set<int> expandedTrackingOrderIds = <int>{};
 
+  // Lokasi Zam Zam Laundry (Indomaret Fresh Podomoro Park Bandung)
+  static const double laundryLatitude = -6.9805;
+  static const double laundryLongitude = 107.6431;
+
+  double? _distanceInKm;
+  bool _isLoadingLocation = false;
+  String? _locationError;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchLocationAndDistance();
+  }
+
   @override
   void dispose() {
     chatController.dispose();
     super.dispose();
+  }
+
+  Future<void> _fetchLocationAndDistance() async {
+    if (!mounted) return;
+    setState(() {
+      _isLoadingLocation = true;
+      _locationError = null;
+    });
+
+    try {
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        if (!mounted) return;
+        setState(() {
+          _locationError = 'Layanan GPS tidak aktif.';
+          _isLoadingLocation = false;
+        });
+        return;
+      }
+
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          if (!mounted) return;
+          setState(() {
+            _locationError = 'Akses lokasi ditolak.';
+            _isLoadingLocation = false;
+          });
+          return;
+        }
+      }
+
+      if (permission == LocationPermission.deniedForever) {
+        if (!mounted) return;
+        setState(() {
+          _locationError = 'Akses lokasi ditolak permanen.';
+          _isLoadingLocation = false;
+        });
+        return;
+      }
+
+      Position position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+        timeLimit: const Duration(seconds: 8),
+      );
+
+      double distanceInMeters = Geolocator.distanceBetween(
+        position.latitude,
+        position.longitude,
+        laundryLatitude,
+        laundryLongitude,
+      );
+
+      if (!mounted) return;
+      setState(() {
+        _distanceInKm = distanceInMeters / 1000;
+        _isLoadingLocation = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _locationError = 'Gagal memuat lokasi: $e';
+        _isLoadingLocation = false;
+      });
+    }
+  }
+
+  void _openMapChooser() {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (context) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Buka Peta Navigasi',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Pilih aplikasi untuk melihat rute ke Zam Zam Laundry',
+                  style: TextStyle(color: Colors.grey.shade700),
+                ),
+                const SizedBox(height: 20),
+                ListTile(
+                  leading: const CircleAvatar(
+                    backgroundColor: AppColors.sage,
+                    child: Icon(Icons.map_outlined, color: AppColors.ink),
+                  ),
+                  title: const Text('Google Maps (Aplikasi)', style: TextStyle(fontWeight: FontWeight.w700)),
+                  subtitle: const Text('Rekomendasi jika aplikasi terinstall'),
+                  onTap: () async {
+                    Navigator.pop(context);
+                    final Uri googleMapsUrl = Uri.parse(
+                      'google.navigation:q=$laundryLatitude,$laundryLongitude&mode=d',
+                    );
+                    if (await canLaunchUrl(googleMapsUrl)) {
+                      await launchUrl(googleMapsUrl);
+                    } else {
+                      final Uri webUrl = Uri.parse(
+                        'https://www.google.com/maps/search/?api=1&query=$laundryLatitude,$laundryLongitude',
+                      );
+                      await launchUrl(webUrl, mode: LaunchMode.externalApplication);
+                    }
+                  },
+                ),
+                const Divider(),
+                ListTile(
+                  leading: const CircleAvatar(
+                    backgroundColor: AppColors.blush,
+                    child: Icon(Icons.open_in_browser_rounded, color: AppColors.ink),
+                  ),
+                  title: const Text('Browser Web', style: TextStyle(fontWeight: FontWeight.w700)),
+                  subtitle: const Text('Membuka rute di tab browser baru'),
+                  onTap: () async {
+                    Navigator.pop(context);
+                    final Uri webUrl = Uri.parse(
+                      'https://www.google.com/maps/search/?api=1&query=$laundryLatitude,$laundryLongitude',
+                    );
+                    await launchUrl(webUrl, mode: LaunchMode.externalApplication);
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   @override
@@ -110,6 +266,157 @@ class _CustomerHomeState extends State<CustomerHome> {
             value: app.currency(app.spendingByCustomer(user?.id ?? 0)),
           ),
         ],
+      ),
+      const SizedBox(height: 18),
+      const SectionHeader(
+        title: 'Lokasi Laundry',
+        subtitle: 'Kunjungi toko kami atau cek jarak pengantaran.',
+      ),
+      const SizedBox(height: 10),
+      SoftCard(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const CircleAvatar(
+                  backgroundColor: AppColors.sage,
+                  child: Icon(Icons.location_on_rounded, color: AppColors.ink),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Zam Zam Laundry',
+                        style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Jl. Podomoro Park No.Kav N 2, Lengkong, Kec. Bojongsoang, Kabupaten Bandung, Jawa Barat 40287',
+                        style: TextStyle(color: Colors.grey.shade700, fontSize: 13),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: AppColors.snow,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Row(
+                children: [
+                  if (_isLoadingLocation) ...[
+                    const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation<Color>(AppColors.rose),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    const Expanded(
+                      child: Text(
+                        'Mengukur jarak...',
+                        style: TextStyle(fontSize: 13),
+                      ),
+                    ),
+                  ] else if (_locationError != null) ...[
+                    const Icon(Icons.info_outline_rounded, color: Colors.orange, size: 18),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _locationError!,
+                        style: const TextStyle(fontSize: 13, color: AppColors.ink),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    InkWell(
+                      onTap: _fetchLocationAndDistance,
+                      borderRadius: BorderRadius.circular(12),
+                      child: const Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        child: Text(
+                          'Coba Lagi',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.rose,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ] else if (_distanceInKm != null) ...[
+                    const Icon(Icons.directions_run_rounded, color: AppColors.rose, size: 18),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Jarak dari lokasi Anda: ${_distanceInKm!.toStringAsFixed(2)} km',
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.refresh_rounded, size: 18),
+                      color: AppColors.rose,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                      onPressed: _fetchLocationAndDistance,
+                    ),
+                  ] else ...[
+                    const Icon(Icons.location_off_rounded, color: Colors.grey, size: 18),
+                    const SizedBox(width: 8),
+                    const Expanded(
+                      child: Text(
+                        'Jarak tidak diketahui.',
+                        style: TextStyle(fontSize: 13),
+                      ),
+                    ),
+                    InkWell(
+                      onTap: _fetchLocationAndDistance,
+                      borderRadius: BorderRadius.circular(12),
+                      child: const Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        child: Text(
+                          'Cek Jarak',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.rose,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: _openMapChooser,
+                icon: const Icon(Icons.near_me_rounded, size: 18),
+                label: const Text('Petunjuk Arah (Google Maps)'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.rose,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
       const SizedBox(height: 18),
       const SectionHeader(

@@ -556,11 +556,16 @@ class AppState extends ChangeNotifier {
         ..addAll(rooms);
 
       if (currentUser?.role == UserRole.admin) {
+        if (_selectedAdminRoomId != null && !rooms.any((r) => r.id == _selectedAdminRoomId)) {
+          _selectedAdminRoomId = rooms.isNotEmpty ? rooms.first.id : null;
+        }
         if (_selectedAdminRoomId == null && rooms.isNotEmpty) {
           _selectedAdminRoomId = rooms.first.id;
         }
         if (_selectedAdminRoomId != null) {
           _updateMessageSubscription(_selectedAdminRoomId!);
+        } else {
+          _cancelChatSubscriptions();
         }
       } else if (currentUser?.role == UserRole.customer) {
         final room = ensureRoomForCustomer(currentUser!.id);
@@ -759,6 +764,20 @@ class AppState extends ChangeNotifier {
         await refreshDashboard();
         await refreshReports();
       }
+    });
+  }
+
+  Future<void> deleteChatRoom(int roomId) async {
+    if (_token == null) return;
+    await _guard(() async {
+      await _api.deleteChatRoom(_token!, roomId);
+      if (_selectedAdminRoomId == roomId) {
+        _selectedAdminRoomId = null;
+        _messagesSubscription?.cancel();
+        _messagesSubscription = null;
+        _subscribedRoomId = null;
+      }
+      await refreshChatRooms();
     });
   }
 

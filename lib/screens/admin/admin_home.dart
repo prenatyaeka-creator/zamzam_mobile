@@ -16,10 +16,14 @@ class AdminHome extends StatefulWidget {
 class _AdminHomeState extends State<AdminHome> {
   int index = 0;
   final chatController = TextEditingController();
+  final reportSearchController = TextEditingController();
+  final customerSearchController = TextEditingController();
 
   @override
   void dispose() {
     chatController.dispose();
+    reportSearchController.dispose();
+    customerSearchController.dispose();
     super.dispose();
   }
 
@@ -354,6 +358,12 @@ class _AdminHomeState extends State<AdminHome> {
 
   Widget _customers(AppState app) {
     final customers = app.customers;
+    final searchQuery = customerSearchController.text.trim().toLowerCase();
+    final filteredCustomers = customers.where((c) {
+      return c.name.toLowerCase().contains(searchQuery) ||
+          c.email.toLowerCase().contains(searchQuery) ||
+          c.phone.toLowerCase().contains(searchQuery);
+    }).toList();
 
     return _pageList([
       const SectionHeader(
@@ -361,7 +371,34 @@ class _AdminHomeState extends State<AdminHome> {
         subtitle: 'Daftar pelanggan beserta ringkasan transaksi mereka.',
       ),
       const SizedBox(height: 10),
-      ...customers.map(
+      TextField(
+        controller: customerSearchController,
+        decoration: InputDecoration(
+          hintText: 'Cari nama, email, atau telepon...',
+          prefixIcon: const Icon(Icons.search_rounded),
+          suffixIcon: customerSearchController.text.isNotEmpty
+              ? IconButton(
+                  icon: const Icon(Icons.clear_rounded),
+                  onPressed: () {
+                    setState(() {
+                      customerSearchController.clear();
+                    });
+                  },
+                )
+              : null,
+        ),
+        onChanged: (_) {
+          setState(() {});
+        },
+      ),
+      const SizedBox(height: 12),
+      if (filteredCustomers.isEmpty)
+        const EmptyPlaceholder(
+          title: 'Tidak Ada Pelanggan',
+          subtitle: 'Tidak menemukan pelanggan yang cocok dengan pencarian.',
+          icon: Icons.person_off_outlined,
+        ),
+      ...filteredCustomers.map(
         (customer) => Padding(
           padding: const EdgeInsets.only(bottom: 12),
           child: SoftCard(
@@ -410,6 +447,11 @@ class _AdminHomeState extends State<AdminHome> {
 
   Widget _reports(AppState app) {
     final transactions = [...app.transactions]..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    final searchQuery = reportSearchController.text.trim().toLowerCase();
+    final filteredTransactions = transactions.where((transaction) {
+      final customer = app.getUser(transaction.customerId);
+      return customer.name.toLowerCase().contains(searchQuery);
+    }).toList();
 
     return _pageList([
       const SectionHeader(
@@ -451,7 +493,34 @@ class _AdminHomeState extends State<AdminHome> {
       const SizedBox(height: 18),
       const SectionHeader(title: 'Detail Transaksi'),
       const SizedBox(height: 10),
-      ...transactions.map(
+      TextField(
+        controller: reportSearchController,
+        decoration: InputDecoration(
+          hintText: 'Cari nama pelanggan...',
+          prefixIcon: const Icon(Icons.search_rounded),
+          suffixIcon: reportSearchController.text.isNotEmpty
+              ? IconButton(
+                  icon: const Icon(Icons.clear_rounded),
+                  onPressed: () {
+                    setState(() {
+                      reportSearchController.clear();
+                    });
+                  },
+                )
+              : null,
+        ),
+        onChanged: (_) {
+          setState(() {});
+        },
+      ),
+      const SizedBox(height: 12),
+      if (filteredTransactions.isEmpty)
+        const EmptyPlaceholder(
+          title: 'Tidak Ada Transaksi',
+          subtitle: 'Tidak menemukan transaksi untuk nama pelanggan tersebut.',
+          icon: Icons.search_off_rounded,
+        ),
+      ...filteredTransactions.map(
         (transaction) {
           final customer = app.getUser(transaction.customerId);
           return Padding(
@@ -557,28 +626,44 @@ const SizedBox(height: 10),
                 ),
               ],
             ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
+            child: Row(
               children: [
-                Text(
-                  room.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w800,
+                Expanded(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        room.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        room.lastMessage,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: isSelected ? Colors.grey.shade800 : Colors.grey.shade700,
+                          fontSize: 12,
+                          height: 1,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  room.lastMessage,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: Colors.grey.shade700,
-                    fontSize: 12,
-                    height: 1,
-                  ),
+                const SizedBox(width: 6),
+                IconButton(
+                  icon: const Icon(Icons.delete_outline, size: 18),
+                  color: isSelected ? AppColors.rose : Colors.red.shade400,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  onPressed: () {
+                    _confirmDeleteChat(context, app, room);
+                  },
                 ),
               ],
             ),
@@ -995,6 +1080,36 @@ const SizedBox(height: 10),
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Orderan ${order.invoiceNo} berhasil dihapus')),
+        );
+      }
+    }
+  }
+
+  Future<void> _confirmDeleteChat(BuildContext context, AppState app, ChatRoom room) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Hapus Chat Pelanggan'),
+        content: Text('Apakah Anda yakin ingin menghapus seluruh riwayat chat dengan ${room.title}? Tindakan ini tidak dapat dibatalkan.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Batal'),
+          ),
+          TextButton(
+            style: TextButton.styleFrom(foregroundColor: Colors.red.shade700),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Hapus'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      await app.deleteChatRoom(room.id);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Chat dengan ${room.title} berhasil dihapus')),
         );
       }
     }

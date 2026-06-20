@@ -821,6 +821,15 @@ class ApiService {
     await _orders.doc('$orderId').delete();
   }
 
+  Future<void> deleteChatRoom(String token, int roomId) async {
+    await _initialize();
+    final messagesSnapshot = await _chatRooms.doc('$roomId').collection('messages').get();
+    for (final doc in messagesSnapshot.docs) {
+      await doc.reference.delete();
+    }
+    await _chatRooms.doc('$roomId').delete();
+  }
+
   Future<void> signOut() async {
     await _auth.signOut();
   }

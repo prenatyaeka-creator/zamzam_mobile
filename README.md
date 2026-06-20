@@ -7,13 +7,18 @@ Aplikasi manajemen laundry berbasis Flutter dan Firebase yang mendukung peran **
 ## 🚀 Fitur Utama & Pembaruan Terbaru
 
 - **Autentikasi Pengguna:** Login terpisah untuk Admin dan Pelanggan, serta registrasi mandiri bagi pelanggan.
+- **Toggle Visibilitas Password:** Tombol interaktif (icon mata) untuk menampilkan atau menyembunyikan input password secara dinamis saat mengetik di form Login dan Registrasi.
+- **Validasi Keamanan Password:** Validasi wajib minimal 8 karakter dengan campuran huruf, angka, dan simbol khusus bagi pendaftar pelanggan baru demi menjaga keamanan akun.
 - **Manajemen Layanan:** Pengelolaan daftar layanan laundry (tambah, edit, dan nonaktifkan layanan) oleh Admin.
 - **Pemesanan Instan (Instant Dialog Dismissal):** Modal dialog pemesanan pada Admin ("Simpan") maupun Pelanggan ("Pesan Sekarang") akan tertutup secara instan seketika tombol ditekan. Proses pencatatan ke Firestore diproses asinkron di latar belakang untuk pengalaman pengguna yang lebih responsif.
 - **Pelacakan Order (Tracking):** Pembuatan order oleh pelanggan, pembaruan status order secara real-time oleh admin (Pending -> Diterima -> Dicuci -> Disetrika -> Siap Diambil -> Selesai/Dibatalkan).
 - **Penghapusan Order (Admin):** Admin dapat menghapus data orderan bermasalah secara permanen (ikon sampah merah) lewat tab Status. Proses penghapusan akan membersihkan seluruh dokumen histories dan data transaksi terkait secara otomatis di Firestore.
-- **Laporan Transaksi & Piutang (Statistik Keuangan):** Dashboard admin menyajikan data omzet lunas, jumlah order aktif/selesai, serta total **Piutang** (Belum Bayar) yang terakumulasi secara real-time dari seluruh order belum lunas yang tidak dibatalkan.
+- **Laporan Transaksi & Pencarian (Admin):** Dashboard admin menyajikan data omzet lunas, jumlah order aktif/selesai, total **Piutang** (Belum Bayar), serta bilah pencarian (search bar) real-time untuk memfilter histori transaksi berdasarkan nama pelanggan.
+- **Pencarian Data Pelanggan (Admin):** Fitur pencarian data pelanggan di halaman Pelanggan berdasarkan nama, email, atau nomor telepon.
 - **Penyederhanaan Query (Tanpa Composite Index):** Query daftar order, data pelanggan, laporan keuangan, hingga real-time chat room disederhanakan tanpa filter ganda di Firestore. Semua penyaringan dan pengurutan diolah di memori lokal aplikasi (*in-memory sorting*), sehingga aplikasi **bebas dari ketergantungan pembuatan Composite Index** di Firebase Console.
-- **Fitur Chat Real-time & Notifikasi Badge:** Sistem pesan instan langsung antara pelanggan dan admin laundry. Tab navigasi Chat akan otomatis memunculkan titik merah (badge) jika terdapat pesan belum dibaca yang masuk di latar belakang.
+- **Fitur Chat Real-time & Hapus Chat (Admin):** Sistem pesan instan langsung antara pelanggan dan admin laundry. Tab navigasi Chat akan otomatis memunculkan titik merah (badge) jika terdapat pesan belum dibaca. Admin dapat menghapus seluruh histori chat pelanggan secara permanen untuk merapikan antarmuka. Selain itu, room chat pelanggan yang aktif / menerima pesan baru akan otomatis berpindah ke urutan teratas (paling kiri).
+- **Lokasi & Jarak Real-Time (Pelanggan):** Menampilkan lokasi Zam Zam Laundry (Indomaret Fresh Podomoro Park Bandung), mengukur jarak dari posisi GPS pengguna secara dinamis, dan menyediakan pilihan navigasi langsung ke Google Maps (aplikasi/browser).
+- **Kustomisasi Launcher Icon APK:** Aplikasi Android build rilis APK dikonfigurasi menggunakan logo resmi Zam Zam Laundry sebagai ikon peluncur (Launcher Icon) menggantikan logo default Flutter.
 - **Normalisasi UID & Hashing**: Sinkronisasi ID pelanggan yang bertipe integer dan string UID (dari otentikasi Firebase lama) diselesaikan secara mulus menggunakan metode polynomial hashing deterministik, memastikan seluruh order dan riwayat chat terpeta ke pelanggan yang tepat.
 
 ---
@@ -131,7 +136,12 @@ flutter run
 ```
 
 ### Membangun APK Rilis (Release APK)
-Ketika melakukan kompilasi rilis, matikan fitur *icon tree-shaking* agar ikon-ikon penting yang dipetakan lewat parameter dinamis (seperti menu navigasi bawah) tidak terhapus dan tampil sempurna:
+Sebelum membuild APK rilis, Anda dapat men-generate launcher icon (logo aplikasi) terbaru dengan perintah:
+```bash
+dart run flutter_launcher_icons
+```
+
+Kemudian lakukan kompilasi rilis dengan mematikan fitur *icon tree-shaking* agar ikon-ikon penting yang dipetakan lewat parameter dinamis (seperti menu navigasi bawah) tidak terhapus dan tampil sempurna:
 ```bash
 flutter build apk --no-tree-shake-icons
 ```

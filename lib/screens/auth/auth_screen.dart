@@ -17,6 +17,7 @@ class _AuthScreenState extends State<AuthScreen> {
   bool isRegister = false;
   UserRole? selectedRole;
   bool rememberMe = false;
+  bool _obscurePassword = true;
 
   final nameController = TextEditingController();
   final emailController = TextEditingController();
@@ -158,11 +159,30 @@ class _AuthScreenState extends State<AuthScreen> {
                     ],
                     TextField(
                       controller: passwordController,
-                      obscureText: true,
+                      obscureText: _obscurePassword,
                       autocorrect: false,
                       enableSuggestions: false,
                       textCapitalization: TextCapitalization.none,
-                      decoration: const InputDecoration(labelText: 'Password'),
+                      decoration: InputDecoration(
+                        labelText: 'Password',
+                        helperText: isRegister
+                            ? 'Minimal 8 karakter campuran huruf, angka, dan simbol'
+                            : null,
+                        helperStyle: const TextStyle(fontSize: 12),
+                        suffixIcon: IconButton(
+                          icon: Icon(
+                            _obscurePassword
+                                ? Icons.visibility_off_outlined
+                                : Icons.visibility_outlined,
+                            color: AppColors.rose,
+                          ),
+                          onPressed: () {
+                            setState(() {
+                              _obscurePassword = !_obscurePassword;
+                            });
+                          },
+                        ),
+                      ),
                     ),
                     if (!isRegister) ...[
                       const SizedBox(height: 8),
@@ -226,12 +246,21 @@ class _AuthScreenState extends State<AuthScreen> {
   Future<void> _submit() async {
     final app = context.read<AppState>();
     if (isRegister) {
+      final password = passwordController.text;
+      if (password.length < 8 ||
+          !RegExp(r'[a-zA-Z]').hasMatch(password) ||
+          !RegExp(r'[0-9]').hasMatch(password) ||
+          !RegExp(r'[^a-zA-Z0-9]').hasMatch(password)) {
+        _showSnack('Password harus minimal 8 karakter dengan campuran huruf, angka, dan simbol.');
+        return;
+      }
+
       final error = await app.registerCustomer(
         name: nameController.text,
         email: emailController.text,
         phone: phoneController.text,
         address: addressController.text,
-        password: passwordController.text,
+        password: password,
       );
       if (!mounted) return;
       if (error != null) {
