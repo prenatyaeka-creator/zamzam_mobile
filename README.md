@@ -17,8 +17,7 @@ Aplikasi manajemen laundry berbasis Flutter dan Firebase yang mendukung peran **
 - **Pencarian Data Pelanggan (Admin):** Fitur pencarian data pelanggan di halaman Pelanggan berdasarkan nama, email, atau nomor telepon.
 - **Penyederhanaan Query (Tanpa Composite Index):** Query daftar order, data pelanggan, laporan keuangan, hingga real-time chat room disederhanakan tanpa filter ganda di Firestore. Semua penyaringan dan pengurutan diolah di memori lokal aplikasi (*in-memory sorting*), sehingga aplikasi **bebas dari ketergantungan pembuatan Composite Index** di Firebase Console.
 - **Fitur Chat Real-time & Hapus Chat (Admin):** Sistem pesan instan langsung antara pelanggan dan admin laundry. Tab navigasi Chat akan otomatis memunculkan titik merah (badge) jika terdapat pesan belum dibaca. Admin dapat menghapus seluruh histori chat pelanggan secara permanen untuk merapikan antarmuka. Selain itu, room chat pelanggan yang aktif / menerima pesan baru akan otomatis berpindah ke urutan teratas (paling kiri).
-- **Lokasi & Jarak Real-Time (Pelanggan):** Menampilkan lokasi Zam Zam Laundry (Indomaret Fresh Podomoro Park Bandung), mengukur jarak dari posisi GPS pengguna secara dinamis, dan menyediakan pilihan navigasi langsung ke Google Maps (aplikasi/browser).
-- **Kustomisasi Launcher Icon APK:** Aplikasi Android build rilis APK dikonfigurasi menggunakan logo resmi Zam Zam Laundry sebagai ikon peluncur (Launcher Icon) menggantikan logo default Flutter.
+- **Lokasi & Jarak Real-Time (Pelanggan):** Menampilkan lokasi Zam Zam Laundry, mengukur jarak dari posisi GPS pengguna secara dinamis, dan menyediakan pilihan navigasi langsung ke Google Maps (aplikasi/browser).
 - **Normalisasi UID & Hashing**: Sinkronisasi ID pelanggan yang bertipe integer dan string UID (dari otentikasi Firebase lama) diselesaikan secara mulus menggunakan metode polynomial hashing deterministik, memastikan seluruh order dan riwayat chat terpeta ke pelanggan yang tepat.
 
 ---
