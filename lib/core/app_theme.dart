@@ -38,15 +38,23 @@ return base.copyWith(
     ),
     border: OutlineInputBorder(
       borderRadius: BorderRadius.circular(20),
-      borderSide: BorderSide.none,
+      borderSide: BorderSide(color: Colors.grey.shade300, width: 1.5),
     ),
     enabledBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(20),
-      borderSide: BorderSide.none,
+      borderSide: BorderSide(color: Colors.grey.shade300, width: 1.5),
     ),
     focusedBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(20),
-      borderSide: const BorderSide(color: AppColors.rose),
+      borderSide: const BorderSide(color: AppColors.rose, width: 2.0),
+    ),
+    errorBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(20),
+      borderSide: const BorderSide(color: Colors.red, width: 1.5),
+    ),
+    focusedErrorBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(20),
+      borderSide: const BorderSide(color: Colors.red, width: 2.0),
     ),
   ),
   elevatedButtonTheme: ElevatedButtonThemeData(
