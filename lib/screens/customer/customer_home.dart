@@ -232,11 +232,18 @@ class _CustomerHomeState extends State<CustomerHome> {
     );
   }
 
-  ListView _pageList(List<Widget> children) {
-    return ListView(
-      padding: const EdgeInsets.only(bottom: 24),
-      physics: const BouncingScrollPhysics(),
-      children: children,
+  Widget _pageList(List<Widget> children, AppState app) {
+    return RefreshIndicator(
+      onRefresh: () => app.refreshAllData(),
+      color: AppColors.rose,
+      backgroundColor: Colors.white,
+      child: ListView(
+        padding: const EdgeInsets.only(bottom: 24),
+        physics: const AlwaysScrollableScrollPhysics(
+          parent: BouncingScrollPhysics(),
+        ),
+        children: children,
+      ),
     );
   }
 
@@ -490,7 +497,7 @@ class _CustomerHomeState extends State<CustomerHome> {
           ),
         ),
       ),
-    ]);
+    ], app);
   }
 
   Widget _priceList(AppState app) {
@@ -537,7 +544,7 @@ class _CustomerHomeState extends State<CustomerHome> {
           ),
         ),
       ),
-    ]);
+    ], app);
   }
 
   Widget _tracking(AppState app) {
@@ -666,7 +673,7 @@ class _CustomerHomeState extends State<CustomerHome> {
           ),
         );
       }),
-    ]);
+    ], app);
   }
 
   Widget _chat(AppState app) {

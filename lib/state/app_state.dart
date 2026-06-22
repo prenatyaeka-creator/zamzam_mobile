@@ -28,6 +28,8 @@ class AppState extends ChangeNotifier {
 
   StreamSubscription<List<ChatRoom>>? _roomsSubscription;
   StreamSubscription<List<ChatMessage>>? _messagesSubscription;
+  StreamSubscription<List<LaundryService>>? _servicesSubscription;
+  StreamSubscription<List<LaundryOrder>>? _ordersSubscription;
   int? _subscribedRoomId;
   DateTime? _chatStreamInitTime;
   final Set<int> _notifiedMessageIds = <int>{};
@@ -146,26 +148,32 @@ class AppState extends ChangeNotifier {
   }
 
   int get activeOrdersCount {
-    if (currentUser?.role == UserRole.admin && _dashboardActiveOrders > 0) {
-      return _dashboardActiveOrders;
-    }
-    return _orders
+    final localActiveCount = _orders
         .where((order) =>
             order.status != OrderStatus.completed &&
             order.status != OrderStatus.cancelled)
         .length;
+    if (localActiveCount == 0 && _dashboardActiveOrders > 0) {
+      return _dashboardActiveOrders;
+    }
+    return localActiveCount;
   }
 
   int get completedOrdersCount =>
       _orders.where((order) => order.status == OrderStatus.completed).length;
 
   double get totalRevenue {
-    if (_transactions.isEmpty && _dashboardMonthlyRevenue > 0) {
+    final today = DateTime.now();
+    final localMonthlyRevenue = _transactions
+        .where((entry) =>
+            entry.status == PaymentStatus.paid &&
+            entry.createdAt.year == today.year &&
+            entry.createdAt.month == today.month)
+        .fold<double>(0, (sum, item) => sum + item.amount);
+    if (localMonthlyRevenue == 0 && _dashboardMonthlyRevenue > 0) {
       return _dashboardMonthlyRevenue;
     }
-    return _transactions
-        .where((entry) => entry.status == PaymentStatus.paid)
-        .fold<double>(0, (sum, item) => sum + item.amount);
+    return localMonthlyRevenue;
   }
 
   double get unpaidRevenue {
@@ -251,6 +259,8 @@ class AppState extends ChangeNotifier {
 
   Future<void> logout() async {
     _cancelChatSubscriptions();
+    _cancelServicesSubscription();
+    _cancelOrdersSubscription();
     await _api.signOut();
     currentUser = null;
     _token = null;
@@ -281,8 +291,23 @@ class AppState extends ChangeNotifier {
       return;
     }
 
-    await refreshServices();
-    await refreshOrders();
+    _setupServicesListener();
+    _setupOrdersListener();
+    _setupChatListeners();
+
+    if (currentUser!.role == UserRole.admin) {
+      await refreshCustomers();
+      await refreshDashboard();
+      await refreshReports();
+    }
+  }
+
+  Future<void> refreshAllData() async {
+    if (_token == null || currentUser == null) return;
+    // ignore: avoid_print
+    print('[AppState] refreshAllData: manually reloading all data');
+    _setupServicesListener();
+    _setupOrdersListener();
     _setupChatListeners();
 
     if (currentUser!.role == UserRole.admin) {
@@ -507,6 +532,85 @@ class AppState extends ChangeNotifier {
     _selectedAdminRoomId = roomId;
     _updateMessageSubscription(roomId);
     notifyListeners();
+  }
+
+  void _cancelServicesSubscription() {
+    _servicesSubscription?.cancel();
+    _servicesSubscription = null;
+  }
+
+  void _setupServicesListener() {
+    _cancelServicesSubscription();
+    if (_token == null) return;
+    // ignore: avoid_print
+    print('[AppState] _setupServicesListener: registering stream listener');
+    _servicesSubscription = _api.getServicesStream().listen((items) {
+      // ignore: avoid_print
+      print('[AppState] Services stream event: received ${items.length} items');
+      _services
+        ..clear()
+        ..addAll(items);
+      notifyListeners();
+    }, onError: (err) {
+      // ignore: avoid_print
+      print('[AppState] Services stream error: $err');
+    });
+  }
+
+  void _cancelOrdersSubscription() {
+    _ordersSubscription?.cancel();
+    _ordersSubscription = null;
+  }
+
+  void _setupOrdersListener() {
+    _cancelOrdersSubscription();
+    if (_token == null || currentUser == null) return;
+
+    final customerId =
+        currentUser!.role == UserRole.customer ? currentUser!.id : null;
+
+    // ignore: avoid_print
+    print('[AppState] _setupOrdersListener: registering stream listener. customerId: $customerId, role: ${currentUser!.role}');
+
+    _ordersSubscription = _api
+        .getOrdersStream(_token!, customerId: customerId)
+        .listen((items) async {
+      // ignore: avoid_print
+      print('[AppState] Orders stream event: received ${items.length} orders');
+      _orders
+        ..clear()
+        ..addAll(items);
+      notifyListeners();
+
+      // Fetch histories and transactions concurrently in the background
+      await Future.wait(items.map((order) async {
+        try {
+          final detail = await _api.getOrderDetail(_token!, order.id);
+          _statusLogs[order.id] = detail.histories;
+          
+          _transactions.removeWhere((t) => t.orderId == order.id);
+          if (detail.transaction != null) {
+            _transactions.add(detail.transaction!);
+          }
+        } catch (e) {
+          // ignore: avoid_print
+          print('[AppState] Error fetching details for order ${order.id}: $e');
+        }
+      }));
+
+      if (currentUser?.role == UserRole.admin) {
+        // ignore: avoid_print
+        print('[AppState] Orders stream event (admin): refreshing customers, dashboard, and reports');
+        await refreshCustomers();
+        await refreshDashboard();
+        await refreshReports();
+      } else {
+        notifyListeners();
+      }
+    }, onError: (err) {
+      // ignore: avoid_print
+      print('[AppState] Orders stream error: $err');
+    });
   }
 
   void _cancelChatSubscriptions() {

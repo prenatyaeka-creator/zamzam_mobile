@@ -294,6 +294,18 @@ class ApiService {
         .toList();
   }
 
+  Stream<List<LaundryService>> getServicesStream() async* {
+    await _initialize();
+    yield* _services.orderBy('service_name').snapshots().map((snapshot) {
+      return snapshot.docs
+          .map((doc) => _serviceFromJson(_normalizeDocument({
+                'id': _asInt(doc.data()['id'] ?? int.tryParse(doc.id)),
+                ...doc.data()
+              })))
+          .toList();
+    });
+  }
+
   Future<LaundryService> createService(
     String token, {
     required String name,
@@ -364,6 +376,24 @@ class ApiService {
         .toList();
     list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
     return list;
+  }
+
+  Stream<List<LaundryOrder>> getOrdersStream(String token, {int? customerId}) async* {
+    await _initialize();
+    Query<Map<String, dynamic>> query = _orders;
+    if (customerId != null && customerId > 0) {
+      query = query.where('customer_id', isEqualTo: customerId);
+    }
+    yield* query.snapshots().map((snapshot) {
+      final list = snapshot.docs
+          .map((doc) => _orderFromJson(_normalizeDocument({
+                'id': _asInt(doc.data()['id'] ?? int.tryParse(doc.id)),
+                ...doc.data()
+              })))
+          .toList();
+      list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      return list;
+    });
   }
 
   Future<OrderDetailPayload> getOrderDetail(String token, int id) async {
@@ -556,22 +586,21 @@ class ApiService {
     return list;
   }
 
-  Stream<List<ChatRoom>> getChatRoomsStream(String token) {
-    return Stream.fromFuture(_getUserByUid(token)).asyncExpand((user) {
-      Query<Map<String, dynamic>> query = _chatRooms;
-      if (user.role == UserRole.customer) {
-        query = query.where('customer_id', isEqualTo: user.id);
-      }
-      return query.snapshots().map((snapshot) {
-        final list = snapshot.docs
-            .map((doc) => _chatRoomFromJson(_normalizeDocument({
-                  'id': _asInt(doc.data()['id'] ?? int.tryParse(doc.id)),
-                  ...doc.data()
-                })))
-            .toList();
-        list.sort((a, b) => b.lastMessageAt.compareTo(a.lastMessageAt));
-        return list;
-      });
+  Stream<List<ChatRoom>> getChatRoomsStream(String token) async* {
+    final user = await _getUserByUid(token);
+    Query<Map<String, dynamic>> query = _chatRooms;
+    if (user.role == UserRole.customer) {
+      query = query.where('customer_id', isEqualTo: user.id);
+    }
+    yield* query.snapshots().map((snapshot) {
+      final list = snapshot.docs
+          .map((doc) => _chatRoomFromJson(_normalizeDocument({
+                'id': _asInt(doc.data()['id'] ?? int.tryParse(doc.id)),
+                ...doc.data()
+              })))
+          .toList();
+      list.sort((a, b) => b.lastMessageAt.compareTo(a.lastMessageAt));
+      return list;
     });
   }
 
@@ -591,22 +620,21 @@ class ApiService {
         .toList();
   }
 
-  Stream<List<ChatMessage>> getChatMessagesStream(String token, int roomId) {
-    return Stream.fromFuture(_initialize()).asyncExpand((_) {
-      return _chatRooms
-          .doc('$roomId')
-          .collection('messages')
-          .orderBy('created_at')
-          .snapshots()
-          .map((snapshot) {
-        return snapshot.docs
-            .map((doc) => _chatMessageFromJson(_normalizeDocument({
-                  'id': _asInt(doc.data()['id'] ?? int.tryParse(doc.id)),
-                  'room_id': roomId,
-                  ...doc.data()
-                })))
-            .toList();
-      });
+  Stream<List<ChatMessage>> getChatMessagesStream(String token, int roomId) async* {
+    await _initialize();
+    yield* _chatRooms
+        .doc('$roomId')
+        .collection('messages')
+        .orderBy('created_at')
+        .snapshots()
+        .map((snapshot) {
+      return snapshot.docs
+          .map((doc) => _chatMessageFromJson(_normalizeDocument({
+                'id': _asInt(doc.data()['id'] ?? int.tryParse(doc.id)),
+                'room_id': roomId,
+                ...doc.data()
+              })))
+          .toList();
     });
   }
 
